@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+  <a href="{{ url_for('campsites_page') }}" class="btn btn-secondary">← 캠핑장 찾기</a>
+  <h1 style="margin:0;font-size:1.1rem">{{ campsite }} — {{ date }}</h1>
+</div>
+
+{% if error %}
+<div class="card" style="background:#fff5f5;border:1px solid #fed7d7;color:#c53030;padding:16px">
+  예약 현황을 불러오지 못했습니다. 숲나들e에서 직접 확인해 주세요.<br>
+  <small>{{ error }}</small>
+</div>
+{% else %}
+
+<div class="status-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+  <div class="card" style="border-top:3px solid #38a169;padding:16px">
+    <p style="font-size:.85rem;color:#718096;margin:0 0 4px">예약 가능</p>
+    <p style="font-size:2rem;font-weight:700;color:#276749;margin:0">{{ available|length }}</p>
+  </div>
+  <div class="card" style="border-top:3px solid #e53e3e;padding:16px">
+    <p style="font-size:.85rem;color:#718096;margin:0 0 4px">예약 불가</p>
+    <p style="font-size:2rem;font-weight:700;color:#c53030;margin:0">{{ full|length }}</p>
+  </div>
+</div>
+
+{% if available %}
+<div class="card" style="margin-bottom:16px">
+  <h2 style="color:#276749;margin:0 0 12px">✅ 예약 가능 사이트</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    {% for s in available %}
+    <span style="background:#c6f6d5;color:#276749;padding:4px 12px;border-radius:20px;font-size:.85rem;font-weight:600">{{ s }}</span>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="card" style="background:#fff5f5;text-align:center;padding:30px;margin-bottom:16px">
+  <p style="color:#c53030;font-size:1rem">😢 이 날짜는 빈자리가 없습니다</p>
+</div>
+{% endif %}
+
+{% if full %}
+<div class="card" style="margin-bottom:16px">
+  <h2 style="color:#c53030;margin:0 0 12px">❌ 예약 마감</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:8px">
+    {% for s in full %}
+    <span style="background:#fed7d7;color:#c53030;padding:4px 12px;border-radius:20px;font-size:.85rem">{{ s }}</span>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if not available and not full %}
+<div class="card" style="text-align:center;padding:40px;color:#a0aec0">
+  <p>사이트 정보를 파싱하지 못했습니다.</p>
+  <p style="font-size:.85rem;margin-top:8px">숲나들e에서 해당 캠핑장 예약 페이지 구조를 확인해 주세요.</p>
+  <a href="https://www.foresttrip.go.kr" target="_blank" class="btn btn-primary" style="margin-top:12px;display:inline-block">숲나들e에서 직접 확인</a>
+</div>
+{% endif %}
+
+{% if not available %}
+<div style="margin-top:20px;text-align:center;background:#fff5f5;border:1px solid #fed7d7;border-radius:10px;padding:20px">
+  <p style="color:#c53030;font-size:.95rem;margin:0 0 12px">빈자리가 없습니다. 빈자리가 생기면 알림 받을까요?</p>
+  <form method="post" action="{{ url_for('quick_add') }}" style="display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center">
+    <input type="hidden" name="camp_name" value="{{ campsite }}">
+    <input type="hidden" name="check_in"  value="{{ date }}">
+    <input type="hidden" name="check_out" value="{{ date }}">
+    <button class="btn btn-primary">🔔 빈자리 알림 등록</button>
+  </form>
+</div>
+{% else %}
+<div style="margin-top:20px;text-align:center;background:#f0fff4;border:1px solid #9ae6b4;border-radius:10px;padding:16px">
+  <p style="color:#276749;font-size:.95rem;margin:0">✅ 빈자리가 있습니다! 지금 바로 <a href="https://www.foresttrip.go.kr" target="_blank" style="color:#276749;font-weight:700">숲나들e</a>에서 예약하세요.</p>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

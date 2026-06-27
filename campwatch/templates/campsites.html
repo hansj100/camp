@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+  <h1 style="margin:0">캠핑장 찾기</h1>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">← 대시보드</a>
+</div>
+
+<div class="card" style="padding:14px 16px;margin-bottom:10px">
+  <input type="text" id="search-input" placeholder="캠핑장 이름 검색..."
+         oninput="applyFilter()" style="margin:0;width:100%">
+</div>
+
+<div class="card" style="padding:12px 16px;margin-bottom:16px">
+  <div style="display:flex;flex-wrap:wrap;gap:6px" id="region-tabs">
+    {% for r in ['전체','서울','경기','인천','강원','충북','충남','대전','세종','경북','경남','대구','울산','부산','전북','전남','광주','제주'] %}
+    <button class="btn btn-sm {% if selected_region == r %}btn-primary{% else %}btn-secondary{% endif %}"
+            data-region="{{ r }}" onclick="setRegion(this,'{{ r }}')">{{ r }}</button>
+    {% endfor %}
+  </div>
+</div>
+
+<p id="result-count" style="font-size:.85rem;color:#718096;margin-bottom:12px">총 {{ campsites|length }}개 캠핑장</p>
+
+<div id="campsite-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px">
+  {% for c in campsites %}
+  <div class="campsite-card card"
+       data-region="{{ c.sido }}" data-name="{{ c.fcltNm }}"
+       style="padding:16px;cursor:pointer;transition:box-shadow .15s;border-left:3px solid #2d6a4f"
+       onmouseover="this.style.boxShadow='0 4px 14px rgba(0,0,0,.12)'"
+       onmouseout="this.style.boxShadow='none'">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+      <strong style="font-size:.88rem;color:#1a202c;line-height:1.4;flex:1">{{ c.fcltNm }}</strong>
+      <span style="font-size:.72rem;background:#e2e8f0;color:#4a5568;padding:2px 7px;border-radius:20px;white-space:nowrap;margin-left:6px">{{ c.sido }}</span>
+    </div>
+    {% if c.addr %}
+    <p style="font-size:.78rem;color:#a0aec0;margin:0 0 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.addr }}</p>
+    {% endif %}
+    <button class="btn btn-primary btn-sm" style="width:100%"
+            onclick="openModal('{{ c.fcltNm|e }}','{{ c.sido }}','{{ c.zoneId }}')">+ 알림 등록</button>
+  </div>
+  {% endfor %}
+  {% if not campsites %}
+  <div style="grid-column:1/-1;text-align:center;padding:60px 0;color:#a0aec0">
+    <p>캠핑장 목록을 불러오지 못했습니다.</p>
+  </div>
+  {% endif %}
+</div>
+
+<!-- 모달 -->
+<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:12px;padding:28px;width:92%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+    <h2 style="margin:0 0 12px;font-size:1.05rem" id="m-title">알림 등록</h2>
+    <a id="m-status-link" href="#" class="btn btn-secondary" style="width:100%;display:block;text-align:center;margin-bottom:12px">👀 예약 현황 보기</a>
+    <form method="post" action="{{ url_for('quick_add') }}">
+      <input type="hidden" name="camp_name" id="m-camp-name">
+      <div class="form-group">
+        <label>사이트명 <span style="font-weight:400;color:#a0aec0;font-size:.8rem">(선택 — 비우면 전체)</span></label>
+        <input name="site_name" type="text" placeholder="예: A-1, 자동차야영장">
+      </div>
+      <div class="form-group">
+        <label>체크인 <span style="color:#e53e3e">*</span></label>
+        <input name="check_in" id="m-checkin" type="date" required>
+      </div>
+      <div class="form-group">
+        <label>체크아웃 <span style="color:#e53e3e">*</span></label>
+        <input name="check_out" id="m-checkout" type="date" required>
+      </div>
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button type="button" class="btn btn-secondary" style="flex:1" onclick="closeModal()">취소</button>
+        <button type="submit" class="btn btn-primary" style="flex:2">감시 시작</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+var currentRegion='전체';
+function setRegion(btn,r){
+  currentRegion=r;
+  document.querySelectorAll('#region-tabs button').forEach(function(b){
+    b.classList.toggle('btn-primary', b.dataset.region===r);
+    b.classList.toggle('btn-secondary', b.dataset.region!==r);
+  });
+  applyFilter();
+}
+function applyFilter(){
+  var q=document.getElementById('search-input').value.trim();
+  var count=0;
+  document.querySelectorAll('.campsite-card').forEach(function(card){
+    var ro=currentRegion==='전체'||card.dataset.region.indexOf(currentRegion)!==-1;
+    var no=!q||card.dataset.name.indexOf(q)!==-1;
+    card.style.display=(ro&&no)?'':'none';
+    if(ro&&no)count++;
+  });
+  document.getElementById('result-count').textContent=count+'개 캠핑장';
+}
+function openModal(name,sido,zoneId){
+  document.getElementById('m-title').textContent=name;
+  document.getElementById('m-camp-name').value=name;
+  var d=new Date(); d.setDate(d.getDate()+7);
+  var d2=new Date(); d2.setDate(d2.getDate()+8);
+  var dateStr=d.toISOString().slice(0,10);
+  document.getElementById('m-checkin').value=dateStr;
+  document.getElementById('m-checkout').value=d2.toISOString().slice(0,10);
+  var statusHref='/status?zone_id='+(zoneId||'')+'&date='+dateStr+'&campsite='+encodeURIComponent(name);
+  document.getElementById('m-status-link').href=statusHref;
+  document.getElementById('modal').style.display='flex';
+}
+function closeModal(){document.getElementById('modal').style.display='none';}
+</script>
+{% endblock %}

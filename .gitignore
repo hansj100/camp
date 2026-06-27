@@ -1,0 +1,10 @@
+campwatch.db
+logs/
+*.log
+*.pid
+__pycache__/
+*.pyc
+*.pyo
+.env
+ssh-key-2026-06-25.key
+ssh-key-2026-06-25.key.pub

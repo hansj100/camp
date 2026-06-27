@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="dashboard-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+  <h1>내 감시 목록</h1>
+  <a href="{{ url_for('campsites_page') }}" class="btn btn-primary">🔍 캠핑장 찾기</a>
+  <a href="{{ url_for('add') }}" class="btn btn-secondary" style="margin-left:8px">+ 직접 입력</a>
+</div>
+
+<div class="card">
+{% if conditions %}
+<table>
+  <thead>
+    <tr>
+      <th>캠핑장</th><th>사이트</th><th>체크인</th><th>체크아웃</th><th>상태</th><th>관리</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for c in conditions %}
+  <tr>
+    <td>{{ c.camp_name }}</td>
+    <td>{{ c.site_name or '전체' }}</td>
+    <td>{{ c.check_in }}</td>
+    <td>{{ c.check_out }}</td>
+    <td>
+      <form method="post" action="{{ url_for('toggle', cid=c.id) }}" style="display:inline">
+        <button class="btn {% if c.active %}btn-primary{% else %}btn-secondary{% endif %}" style="padding:.2rem .7rem;font-size:.8rem;">
+          {% if c.active %}<span class="badge badge-on">감시 중</span>{% else %}<span class="badge badge-off">중지</span>{% endif %}
+        </button>
+      </form>
+    </td>
+    <td>
+      <form method="post" action="{{ url_for('delete', cid=c.id) }}" style="display:inline" onsubmit="return confirm('삭제할까요?')">
+        <button class="btn btn-danger" style="padding:.2rem .7rem;font-size:.8rem;">삭제</button>
+      </form>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p style="color:#999;text-align:center;padding:2rem;">감시 중인 조건이 없습니다. <a href="{{ url_for('add') }}">추가해보세요!</a></p>
+{% endif %}
+</div>
+
+{% if logs %}
+<h2>최근 알림 내역</h2>
+<div class="card">
+<table>
+  <thead><tr><th>시간</th><th>캠핑장</th><th>내용</th></tr></thead>
+  <tbody>
+  {% for l in logs %}
+  <tr>
+    <td style="white-space:nowrap">{{ l.notified_at[:16] }}</td>
+    <td>{{ l.camp_name }}</td>
+    <td>{{ l.message[:80] }}...</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

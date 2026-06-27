@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CampWatch</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #f0f4f0; color: #2d2d2d; }
+  nav { background: #2e7d32; color: #fff; padding: 0.8rem 1.5rem; display: flex; align-items: center; gap: 1.5rem; }
+  nav a { color: #fff; text-decoration: none; font-weight: 500; }
+  nav .brand { font-size: 1.2rem; font-weight: 700; }
+  nav .spacer { flex: 1; }
+  .container { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+  .card { background: #fff; border-radius: 10px; padding: 1.5rem; margin-bottom: 1.2rem; box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  h1, h2 { margin-bottom: 1rem; color: #1b5e20; }
+  .btn { display: inline-block; padding: .5rem 1.2rem; border-radius: 6px; border: none; cursor: pointer; font-size: .9rem; text-decoration: none; }
+  .btn-primary { background: #2e7d32; color: #fff; }
+  .btn-danger  { background: #c62828; color: #fff; }
+  .btn-secondary { background: #e0e0e0; color: #333; }
+  .btn:hover { opacity: .85; }
+  input, select { width: 100%; padding: .5rem .75rem; border: 1px solid #ccc; border-radius: 6px; font-size: .95rem; margin-top: .3rem; }
+  label { font-size: .9rem; color: #555; }
+  .form-group { margin-bottom: 1rem; }
+  .flash { padding: .7rem 1rem; border-radius: 6px; background: #e8f5e9; border: 1px solid #a5d6a7; margin-bottom: 1rem; color: #2e7d32; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: .6rem .8rem; text-align: left; border-bottom: 1px solid #eee; font-size: .9rem; }
+  th { background: #f5f5f5; font-weight: 600; }
+  .badge { padding: .2rem .6rem; border-radius: 20px; font-size: .8rem; }
+  .badge-on  { background: #e8f5e9; color: #2e7d32; }
+  .badge-off { background: #fce4ec; color: #b71c1c; }
+  .btn-sm { padding: .25rem .7rem; font-size: .8rem; }
+  /* 모바일 */
+  @media(max-width:768px){
+    nav{padding:10px 14px;flex-wrap:wrap;gap:.8rem}
+    nav .brand{font-size:1rem}
+    .container{margin:12px auto;padding:0 10px}
+    .card{padding:14px}
+    h1{font-size:1.1rem}
+    table{font-size:.82rem}
+    th,td{padding:6px 8px}
+    .btn{padding:8px 14px;font-size:.85rem}
+    .btn-sm{padding:5px 10px;font-size:.78rem}
+    .dashboard-header{flex-direction:column!important;align-items:flex-start!important;gap:10px}
+    #campsite-grid{grid-template-columns:1fr!important}
+    .status-grid{grid-template-columns:1fr 1fr!important}
+  }
+  /* 태블릿 */
+  @media(min-width:769px) and (max-width:1024px){
+    .container{max-width:700px}
+    #campsite-grid{grid-template-columns:repeat(2,1fr)!important}
+  }
+  /* PC */
+  @media(min-width:1025px){
+    .container{max-width:900px}
+    #campsite-grid{grid-template-columns:repeat(3,1fr)!important}
+  }
+</style>
+</head>
+<body>
+{% if session.username %}
+<nav>
+  <span class="brand">🏕️ CampWatch</span>
+  <a href="{{ url_for('dashboard') }}">대시보드</a>
+  <a href="{{ url_for('add') }}">+ 조건 추가</a>
+  <a href="{{ url_for('settings') }}">설정</a>
+  {% if session.get('is_admin') %}<a href="{{ url_for('admin_page') }}">👤 관리자</a>{% endif %}
+  <span class="spacer"></span>
+  <span>{{ session.username }}</span>
+  <a href="{{ url_for('logout') }}">로그아웃</a>
+</nav>
+{% endif %}
+<div class="container">
+  {% with msgs = get_flashed_messages() %}
+    {% if msgs %}{% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}{% endif %}
+  {% endwith %}
+  {% block content %}{% endblock %}
+</div>
+</body>
+</html>
