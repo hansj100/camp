@@ -8,6 +8,8 @@ git pull origin main 2>&1 || echo "git pull 실패 (계속 진행)"
 cp campwatch/app.py app.py 2>/dev/null || true
 cp campwatch/models.py models.py 2>/dev/null || true
 cp campwatch/crawler.py crawler.py 2>/dev/null || true
+cp campwatch/crypto.py crypto.py 2>/dev/null || true
+cp campwatch/requirements.txt requirements.txt 2>/dev/null || true
 cp -r campwatch/templates/* templates/ 2>/dev/null || true
 
 pkill -f 'python3 app.py' 2>/dev/null
