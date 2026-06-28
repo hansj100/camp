@@ -538,6 +538,8 @@ def check_foresttrip_availability(zone_id: str, date: str, nights: int = 1) -> i
             "Referer": "https://www.foresttrip.go.kr/",
             "Accept": "text/html,application/xhtml+xml,*/*",
         })
+        if r.status_code != 200:
+            return -1
         soup = BS(r.text, "lxml")
         available_count = len(soup.find_all(string=lambda t: t and '예약하기' in t))
         if available_count == 0:
@@ -614,11 +616,17 @@ def show_status():
             elif count == 0:
                 full = ['예약 불가']
             else:
-                error = '조회 실패 (-1)'
+                error = '숲나들e 서버 인증 오류 (로그인 필요 또는 URL 변경). 아래 링크에서 직접 확인하세요.'
         except Exception as e:
             error = str(e)
+    foresttrip_url = (
+        f'https://www.foresttrip.go.kr/rep/or/sssn/fcfsRsrvtPssblGoodsDetls.do'
+        f'?srchInsttId={zone_id}&srchRsrvtBgDt={date.replace("-","")}'
+        f'&menuId=001001&hmpgId=FRIP'
+    ) if zone_id else 'https://www.foresttrip.go.kr/'
     return render_template('status.html', zone_id=zone_id, date=date,
-                           campsite=campsite, available=available, full=full, error=error)
+                           campsite=campsite, available=available, full=full, error=error,
+                           foresttrip_url=foresttrip_url)
 
 # -- api_check
 @app.route('/api/check/<int:cond_id>')

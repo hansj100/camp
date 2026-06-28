@@ -7,8 +7,11 @@
 
 {% if error %}
 <div class="card" style="background:#fff5f5;border:1px solid #fed7d7;color:#c53030;padding:16px">
-  예약 현황을 불러오지 못했습니다. 숲나들e에서 직접 확인해 주세요.<br>
+  예약 현황을 불러오지 못했습니다.<br>
   <small>{{ error }}</small>
+  <div style="margin-top:12px">
+    <a href="{{ foresttrip_url }}" target="_blank" class="btn btn-primary" style="display:inline-block">숲나들e에서 직접 확인 →</a>
+  </div>
 </div>
 {% else %}
 
