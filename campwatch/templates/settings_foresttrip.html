@@ -9,19 +9,20 @@
   <form method="POST">
     <div style="margin-bottom:12px">
       <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:4px">아이디</label>
-      <input type="text" name="foresttrip_id" value="{{ user.foresttrip_id or '' }}"
+      <input type="text" name="foresttrip_id" value="{{ foresttrip_id_display or '' }}"
              style="width:100%;padding:8px 12px;border:1px solid #cbd5e0;border-radius:6px;box-sizing:border-box">
     </div>
     <div style="margin-bottom:16px">
       <label style="font-size:.85rem;font-weight:600;display:block;margin-bottom:4px">비밀번호</label>
-      <input type="password" name="foresttrip_pw" value="{{ user.foresttrip_pw or '' }}"
+      <input type="password" name="foresttrip_pw" placeholder="{{ '저장됨 (변경 시 입력)' if user.foresttrip_pw else '비밀번호 입력' }}"
              style="width:100%;padding:8px 12px;border:1px solid #cbd5e0;border-radius:6px;box-sizing:border-box">
+      <span style="font-size:.78rem;color:#a0aec0">비워두면 기존 비밀번호 유지</span>
     </div>
     <button type="submit" class="btn btn-primary" style="width:100%">저장</button>
   </form>
   {% if user.foresttrip_id %}
   <div style="margin-top:12px;padding:10px;background:#c6f6d5;border-radius:6px;font-size:.85rem;color:#276749">
-    ✅ 계정 연동됨 ({{ user.foresttrip_id }})
+    ✅ 계정 연동됨 ({{ foresttrip_id_display }}) &nbsp;🔒 암호화 저장
   </div>
   {% endif %}
 </div>

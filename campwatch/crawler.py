@@ -3,6 +3,7 @@ import random
 import logging
 import requests
 from models import get_db, init_db
+from crypto import decrypt_text
 
 # foresttrip 로그인 세션 캐시: {user_id: (session, fetched_at)}
 _FT_SESSION_CACHE = {}
@@ -63,6 +64,11 @@ def get_foresttrip_session_for_user(user_id):
     if not user or not user["foresttrip_id"] or not user["foresttrip_pw"]:
         return None
 
+    fid = decrypt_text(user["foresttrip_id"])
+    fpw = decrypt_text(user["foresttrip_pw"])
+    if not fid or not fpw:
+        return None
+
     s = requests.Session()
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -77,7 +83,7 @@ def get_foresttrip_session_for_user(user_id):
             csrf = csrf_tag.get("content") or csrf_tag.get("value", "")
 
         r2 = s.post("https://www.foresttrip.go.kr/member/login/memberLoginProc.do",
-                    data={"userId": user["foresttrip_id"], "userPwd": user["foresttrip_pw"], "_csrf": csrf},
+                    data={"userId": fid, "userPwd": fpw, "_csrf": csrf},
                     headers=headers, timeout=10, allow_redirects=True)
 
         if "logout" in r2.text.lower() or "로그아웃" in r2.text:

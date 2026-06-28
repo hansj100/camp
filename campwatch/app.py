@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, redirect, url_for, session, flash
 from models import get_db, init_db
+from crypto import encrypt_text, decrypt_text
 from datetime import datetime as _dt, timedelta
 import functools
 import bcrypt
@@ -290,13 +291,25 @@ def settings_foresttrip():
     if request.method == 'POST':
         fid = request.form.get('foresttrip_id', '').strip()
         fpw = request.form.get('foresttrip_pw', '').strip()
-        db.execute('UPDATE users SET foresttrip_id=?, foresttrip_pw=? WHERE id=?',
-                   (fid or None, fpw or None, session['user_id']))
+        if fid and fpw:
+            # 아이디+비밀번호 둘 다 입력 → 둘 다 갱신
+            db.execute('UPDATE users SET foresttrip_id=?, foresttrip_pw=? WHERE id=?',
+                       (encrypt_text(fid), encrypt_text(fpw), session['user_id']))
+        elif fid:
+            # 아이디만 입력 → 아이디만 갱신 (비밀번호 유지)
+            db.execute('UPDATE users SET foresttrip_id=? WHERE id=?',
+                       (encrypt_text(fid), session['user_id']))
+        elif not fid and not fpw:
+            # 둘 다 비움 → 연동 해제
+            db.execute('UPDATE users SET foresttrip_id=NULL, foresttrip_pw=NULL WHERE id=?',
+                       (session['user_id'],))
         db.commit()
         flash('저장됐습니다.', 'success')
     user = db.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone()
     db.close()
-    return render_template('settings_foresttrip.html', user=user)
+    foresttrip_id_display = decrypt_text(user['foresttrip_id']) if user['foresttrip_id'] else None
+    return render_template('settings_foresttrip.html', user=user,
+                           foresttrip_id_display=foresttrip_id_display)
 
 @app.route('/restart', methods=['POST'])
 @login_required
@@ -529,6 +542,11 @@ def get_foresttrip_session(user_id):
     if not user or not user["foresttrip_id"] or not user["foresttrip_pw"]:
         return None
 
+    fid = decrypt_text(user["foresttrip_id"])
+    fpw = decrypt_text(user["foresttrip_pw"])
+    if not fid or not fpw:
+        return None
+
     s = _req.Session()
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -544,8 +562,8 @@ def get_foresttrip_session(user_id):
             csrf = csrf_tag.get("content") or csrf_tag.get("value", "")
 
         login_data = {
-            "userId": user["foresttrip_id"],
-            "userPwd": user["foresttrip_pw"],
+            "userId": fid,
+            "userPwd": fpw,
             "_csrf": csrf,
         }
         r2 = s.post("https://www.foresttrip.go.kr/member/login/memberLoginProc.do",
