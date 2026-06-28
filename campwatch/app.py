@@ -550,23 +550,23 @@ def get_foresttrip_session(user_id):
     s = _req.Session()
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "https://www.foresttrip.go.kr/"
+        "Referer": "https://www.foresttrip.go.kr/member/login/memberLogin.do"
     }
     try:
-        r = s.get("https://www.foresttrip.go.kr/", headers=headers, timeout=10)
+        r = s.get("https://www.foresttrip.go.kr/member/login/memberLogin.do", headers=headers, timeout=10)
         from bs4 import BeautifulSoup as BS
         soup = BS(r.text, "lxml")
         csrf = ""
-        csrf_tag = soup.find("meta", {"name": "_csrf"}) or soup.find("input", {"name": "_csrf"})
+        csrf_tag = soup.find("input", {"name": "_csrf"})
         if csrf_tag:
-            csrf = csrf_tag.get("content") or csrf_tag.get("value", "")
+            csrf = csrf_tag.get("value", "")
 
         login_data = {
-            "userId": fid,
-            "userPwd": fpw,
+            "loginId": fid,
+            "loginPwd": fpw,
             "_csrf": csrf,
         }
-        r2 = s.post("https://www.foresttrip.go.kr/member/login/memberLoginProc.do",
+        r2 = s.post("https://www.foresttrip.go.kr/com/login",
                     data=login_data, headers=headers, timeout=10, allow_redirects=True)
 
         if "logout" in r2.text.lower() or "로그아웃" in r2.text:
@@ -699,8 +699,7 @@ def show_status():
             error = str(e)
     foresttrip_url = (
         f'https://www.foresttrip.go.kr/rep/or/sssn/fcfsRsrvtPssblGoodsDetls.do'
-        f'?srchInsttId={zone_id}&srchRsrvtBgDt={date.replace("-","")}'
-        f'&menuId=001001&hmpgId=FRIP'
+        f'?srchInsttId={zone_id}'
     ) if zone_id else 'https://www.foresttrip.go.kr/'
     return render_template('status.html', zone_id=zone_id, date=date,
                            campsite=campsite, available=available, full=full, error=error,
