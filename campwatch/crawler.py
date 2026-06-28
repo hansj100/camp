@@ -72,18 +72,20 @@ def get_foresttrip_session_for_user(user_id):
     s = requests.Session()
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "https://www.foresttrip.go.kr/"
+        "Referer": "https://www.foresttrip.go.kr/com/login",
     }
     try:
-        r = s.get("https://www.foresttrip.go.kr/", headers=headers, timeout=10)
+        r = s.get("https://www.foresttrip.go.kr/com/login", headers=headers, timeout=10)
         soup = BS(r.text, "lxml")
         csrf = ""
-        csrf_tag = soup.find("meta", {"name": "_csrf"}) or soup.find("input", {"name": "_csrf"})
+        csrf_tag = soup.find("input", {"name": "_csrf"})
         if csrf_tag:
-            csrf = csrf_tag.get("content") or csrf_tag.get("value", "")
+            csrf = csrf_tag.get("value", "")
+        salt_tag = soup.find("input", {"name": "saltVals"})
+        salt = salt_tag.get("value", "") if salt_tag else ""
 
-        r2 = s.post("https://www.foresttrip.go.kr/member/login/memberLoginProc.do",
-                    data={"userId": fid, "userPwd": fpw, "_csrf": csrf},
+        r2 = s.post("https://www.foresttrip.go.kr/com/login",
+                    data={"loginId": fid, "loginPwd": fpw, "_csrf": csrf, "saltVals": salt},
                     headers=headers, timeout=10, allow_redirects=True)
 
         if "logout" in r2.text.lower() or "로그아웃" in r2.text:
@@ -175,7 +177,7 @@ def check_foresttrip_availability(camp_name, site_name, zone_id, check_in, check
         })
 
     try:
-        url = "https://www.foresttrip.go.kr/rep/or/sssn/fcfsRsrvtPssblGoodsDetls.do"
+        url = "https://www.foresttrip.go.kr/rep/or/fcfsRsrvtPssblGoodsDetls.do"
         params = {
             "srchInsttId": zone_id,
             "srchRsrvtBgDt": date_str,

@@ -10,7 +10,7 @@
   예약 현황을 불러오지 못했습니다.<br>
   <small>{{ error }}</small>
   <div style="margin-top:12px">
-    <a href="{{ foresttrip_url }}" target="_blank" class="btn btn-primary" style="display:inline-block">숲나들e에서 직접 확인 →</a>
+    <a href="{{ direct_url }}" target="_blank" class="btn btn-primary" style="display:inline-block">{{ direct_label }}</a>
   </div>
 </div>
 {% else %}
@@ -55,8 +55,8 @@
 {% if not available and not full %}
 <div class="card" style="text-align:center;padding:40px;color:#a0aec0">
   <p>사이트 정보를 파싱하지 못했습니다.</p>
-  <p style="font-size:.85rem;margin-top:8px">숲나들e에서 해당 캠핑장 예약 페이지 구조를 확인해 주세요.</p>
-  <a href="https://www.foresttrip.go.kr" target="_blank" class="btn btn-primary" style="margin-top:12px;display:inline-block">숲나들e에서 직접 확인</a>
+  <p style="font-size:.85rem;margin-top:8px">예약 사이트에서 해당 캠핑장 예약 페이지 구조를 확인해 주세요.</p>
+  <a href="{{ direct_url }}" target="_blank" class="btn btn-primary" style="margin-top:12px;display:inline-block">{{ direct_label }}</a>
 </div>
 {% endif %}
 
@@ -72,7 +72,7 @@
 </div>
 {% else %}
 <div style="margin-top:20px;text-align:center;background:#f0fff4;border:1px solid #9ae6b4;border-radius:10px;padding:16px">
-  <p style="color:#276749;font-size:.95rem;margin:0">✅ 빈자리가 있습니다! 지금 바로 <a href="https://www.foresttrip.go.kr" target="_blank" style="color:#276749;font-weight:700">숲나들e</a>에서 예약하세요.</p>
+  <p style="color:#276749;font-size:.95rem;margin:0">✅ 빈자리가 있습니다! 지금 바로 <a href="{{ direct_url }}" target="_blank" style="color:#276749;font-weight:700">{{ '국립공원예약' if source == 'knps' else '숲나들e' }}</a>에서 예약하세요.</p>
 </div>
 {% endif %}
 

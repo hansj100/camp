@@ -574,21 +574,24 @@ def get_foresttrip_session(user_id):
     s = _req.Session()
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer": "https://www.foresttrip.go.kr/member/login/memberLogin.do"
+        "Referer": "https://www.foresttrip.go.kr/com/login",
     }
     try:
-        r = s.get("https://www.foresttrip.go.kr/member/login/memberLogin.do", headers=headers, timeout=10)
+        r = s.get("https://www.foresttrip.go.kr/com/login", headers=headers, timeout=10)
         from bs4 import BeautifulSoup as BS
         soup = BS(r.text, "lxml")
         csrf = ""
         csrf_tag = soup.find("input", {"name": "_csrf"})
         if csrf_tag:
             csrf = csrf_tag.get("value", "")
+        salt_tag = soup.find("input", {"name": "saltVals"})
+        salt = salt_tag.get("value", "") if salt_tag else ""
 
         login_data = {
             "loginId": fid,
             "loginPwd": fpw,
             "_csrf": csrf,
+            "saltVals": salt,
         }
         r2 = s.post("https://www.foresttrip.go.kr/com/login",
                     data=login_data, headers=headers, timeout=10, allow_redirects=True)
@@ -624,7 +627,7 @@ def check_foresttrip_availability(zone_id: str, date: str, nights: int = 1, user
         })
 
     try:
-        url = "https://www.foresttrip.go.kr/rep/or/sssn/fcfsRsrvtPssblGoodsDetls.do"
+        url = "https://www.foresttrip.go.kr/rep/or/fcfsRsrvtPssblGoodsDetls.do"
         params = {
             "srchInsttId": zone_id,
             "srchRsrvtBgDt": date_str,
@@ -752,25 +755,38 @@ def show_status():
     zone_id  = request.args.get('zone_id', '')
     date     = request.args.get('date', '')
     campsite = request.args.get('campsite', '')
+    source   = request.args.get('source', '')
+    if not source:
+        source = 'knps' if zone_id in KNPS_CAMPS else 'foresttrip'
     available, full, error = [], [], None
     if zone_id and date:
         try:
-            count = check_foresttrip_availability(zone_id, date, user_id=session.get('user_id'))
+            if source == 'knps':
+                count = check_knps_availability(zone_id, date, user_id=session.get('user_id'))
+                err_msg = '국립공원 예약 서버 오류. 아래 링크에서 직접 확인하세요.'
+            else:
+                count = check_foresttrip_availability(zone_id, date, user_id=session.get('user_id'))
+                err_msg = '숲나들e 서버 인증 오류 (로그인 필요 또는 URL 변경). 아래 링크에서 직접 확인하세요.'
             if count > 0:
                 available = [f'예약 가능 {count}건']
             elif count == 0:
                 full = ['예약 불가']
             else:
-                error = '숲나들e 서버 인증 오류 (로그인 필요 또는 URL 변경). 아래 링크에서 직접 확인하세요.'
+                error = err_msg
         except Exception as e:
             error = str(e)
-    foresttrip_url = (
-        f'https://www.foresttrip.go.kr/rep/or/sssn/fcfsRsrvtPssblGoodsDetls.do'
-        f'?srchInsttId={zone_id}'
-    ) if zone_id else 'https://www.foresttrip.go.kr/'
+    if source == 'knps':
+        direct_url = 'https://reservation.knps.or.kr/reservation/searchSimpleCampReservation.do'
+        direct_label = '국립공원예약에서 직접 확인 →'
+    else:
+        direct_url = (
+            f'https://www.foresttrip.go.kr/rep/or/sssn/fcfsRsrvtMgntSrchList.do'
+            f'?srchInsttId={zone_id}'
+        ) if zone_id else 'https://www.foresttrip.go.kr/rep/or/fcfsRsrvtMain.do'
+        direct_label = '숲나들e에서 직접 확인 →'
     return render_template('status.html', zone_id=zone_id, date=date,
                            campsite=campsite, available=available, full=full, error=error,
-                           foresttrip_url=foresttrip_url)
+                           source=source, direct_url=direct_url, direct_label=direct_label)
 
 # -- api_check
 @app.route('/api/check/<int:cond_id>')
