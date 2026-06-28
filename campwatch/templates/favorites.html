@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}즐겨찾기 — CampWatch{% endblock %}
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+  <h1 style="margin:0">⭐ 즐겨찾기</h1>
+  <a href="/campsites" class="btn btn-secondary btn-sm">← 캠핑장 찾기</a>
+</div>
+{% if favorites %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
+  {% for f in favorites %}
+  <div class="card" style="padding:16px;border-left:3px solid #f6ad55">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <strong style="font-size:.9rem">{{ f.campsite }}</strong>
+      <span style="font-size:.72rem;background:#e2e8f0;color:#4a5568;padding:2px 7px;border-radius:20px">{{ f.sido }}</span>
+    </div>
+    <div style="font-size:.75rem;color:#718096;margin-top:4px">zone_id: {{ f.zone_id }}</div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-primary btn-sm" style="flex:1"
+              onclick="openModal('{{ f.campsite|e }}','{{ f.zone_id }}','{{ f.sido }}')">+ 알림 등록</button>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:40px">
+  <p style="color:#718096">즐겨찾기한 캠핑장이 없습니다.</p>
+  <a href="/campsites" class="btn btn-primary" style="margin-top:12px;display:inline-block">캠핑장 찾기</a>
+</div>
+{% endif %}
+
+<!-- 모달 -->
+<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;overflow-y:auto">
+  <div style="background:#fff;border-radius:12px;padding:28px;width:92%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.25);margin:20px auto">
+    <h2 style="margin:0 0 12px;font-size:1.05rem" id="m-title">알림 등록</h2>
+    <a id="m-status-link" href="#" class="btn btn-secondary" style="width:100%;display:block;text-align:center;margin-bottom:12px">👀 예약 현황 보기</a>
+    <form method="post" action="{{ url_for('quick_add') }}">
+      <input type="hidden" name="camp_name" id="m-camp-name">
+      <input type="hidden" name="zone_id"   id="m-zone-id">
+      <input type="hidden" id="m-checkout" name="check_out">
+
+      <div class="form-group">
+        <label>사이트명 <span style="font-weight:400;color:#a0aec0;font-size:.8rem">(선택 — 비우면 전체)</span></label>
+        <input name="site_name" type="text" placeholder="예: A-1, 자동차야영장">
+      </div>
+
+      <div class="form-group">
+        <label>체크인 날짜 <span style="color:#e53e3e">*</span></label>
+        <input name="check_in" id="m-checkin" type="date" required oninput="updateStay()">
+      </div>
+
+      <div class="form-group">
+        <label>숙박 기간</label>
+        <select name="nights" id="m-nights" onchange="updateStay()" style="margin-top:.3rem">
+          <option value="1">1박 2일</option>
+          <option value="2">2박 3일</option>
+          <option value="3">3박 4일</option>
+          <option value="4">4박 5일</option>
+        </select>
+      </div>
+
+      <div id="m-stay-info" style="background:#f0fff4;border-radius:7px;padding:10px;font-size:.85rem;color:#276749;margin-bottom:14px;display:none">
+        <strong id="m-stay-text"></strong>
+      </div>
+
+      <div style="display:flex;gap:10px;margin-top:8px">
+        <button type="button" class="btn btn-secondary" style="flex:1" onclick="closeModal()">취소</button>
+        <button type="submit" class="btn btn-primary" style="flex:2">감시 시작</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+function updateStay(){
+  var d=document.getElementById('m-checkin').value;
+  var n=parseInt(document.getElementById('m-nights').value);
+  if(!d||!n)return;
+  var checkin=new Date(d);
+  var checkout=new Date(checkin);
+  checkout.setDate(checkout.getDate()+n);
+  var today=new Date(); today.setHours(0,0,0,0);
+  var diffDays=Math.ceil((checkin-today)/(1000*60*60*24));
+  var ciStr=(checkin.getMonth()+1)+'월 '+checkin.getDate()+'일';
+  var coStr=(checkout.getMonth()+1)+'월 '+checkout.getDate()+'일';
+  var daysMsg=diffDays>0?'(D-'+diffDays+')':diffDays===0?'(오늘!)':'(이미 지난 날짜)';
+  document.getElementById('m-stay-text').textContent=n+'박 '+(n+1)+'일 | 체크인 '+ciStr+' '+daysMsg+' → 체크아웃 '+coStr;
+  document.getElementById('m-stay-info').style.display='block';
+  document.getElementById('m-checkout').value=checkout.toISOString().slice(0,10);
+  var sl=document.getElementById('m-status-link');
+  if(sl.dataset.zoneId){
+    sl.href='/status?zone_id='+sl.dataset.zoneId+'&date='+d+'&campsite='+sl.dataset.campsite;
+  }
+}
+function openModal(name,zoneId,sido){
+  document.getElementById('m-title').textContent=name;
+  document.getElementById('m-camp-name').value=name;
+  document.getElementById('m-zone-id').value=zoneId||'';
+
+  var d=new Date(); d.setDate(d.getDate()+7);
+  var dateStr=d.toISOString().slice(0,10);
+  document.getElementById('m-checkin').value=dateStr;
+  document.getElementById('m-nights').value='1';
+  updateStay();
+
+  var statusLink=document.getElementById('m-status-link');
+  statusLink.dataset.zoneId=zoneId||'';
+  statusLink.dataset.campsite=encodeURIComponent(name);
+  if(!zoneId){
+    statusLink.href='#';
+    statusLink.textContent='⚠ zone_id 없음 — 숲나들e에서 직접 확인';
+    statusLink.style.background='#fed7d7';statusLink.style.color='#c53030';
+    statusLink.onclick=function(e){e.preventDefault();alert('이 캠핑장은 zone_id 정보가 없습니다.\nhttps://www.foresttrip.go.kr 에서 직접 검색해 주세요.');};
+  } else {
+    statusLink.href='/status?zone_id='+zoneId+'&date='+dateStr+'&campsite='+encodeURIComponent(name);
+    statusLink.textContent='👀 예약 현황 보기';
+    statusLink.style.background='';statusLink.style.color='';
+    statusLink.onclick=null;
+  }
+  document.getElementById('modal').style.display='flex';
+}
+function closeModal(){document.getElementById('modal').style.display='none';}
+</script>
+{% endblock %}

@@ -10,6 +10,14 @@
          oninput="applyFilter()" style="margin:0;width:100%">
 </div>
 
+<div class="card" style="padding:12px 16px;margin-bottom:10px">
+  <div style="display:flex;gap:8px;flex-wrap:wrap" id="type-tabs">
+    <button class="type-btn btn btn-sm btn-primary" data-type="all" onclick="filterType(this)">전체</button>
+    <button class="type-btn btn btn-sm btn-secondary" data-type="휴양림" onclick="filterType(this)">🌲 휴양림</button>
+    <button class="type-btn btn btn-sm btn-secondary" data-type="야영장" onclick="filterType(this)">⛺ 야영장</button>
+  </div>
+</div>
+
 <div class="card" style="padding:12px 16px;margin-bottom:16px">
   <div style="display:flex;flex-wrap:wrap;gap:6px" id="region-tabs">
     {% for r in ['전체','서울','경기','인천','강원','충북','충남','대전','세종','경북','경남','대구','울산','부산','전북','전남','광주','제주'] %}
@@ -23,20 +31,56 @@
 
 <div id="campsite-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px">
   {% for c in campsites %}
-  <div class="campsite-card card"
+  {% set is_knps = c.source == 'knps' %}
+  {% set border_color = '#3182ce' if is_knps else '#2d6a4f' %}
+  <div class="campsite-card camp-card card"
        data-region="{{ c.sido }}" data-name="{{ c.fcltNm }}"
-       style="padding:16px;cursor:pointer;transition:box-shadow .15s;border-left:3px solid #2d6a4f"
+       data-type="{{ c.type if c.type else '휴양림' }}"
+       style="padding:16px;cursor:pointer;transition:box-shadow .15s;border-left:3px solid {{ border_color }}"
        onmouseover="this.style.boxShadow='0 4px 14px rgba(0,0,0,.12)'"
        onmouseout="this.style.boxShadow='none'">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
       <strong style="font-size:.88rem;color:#1a202c;line-height:1.4;flex:1">{{ c.fcltNm }}</strong>
+      <button class="fav-btn" data-zoneid="{{ c.zoneId }}" data-name="{{ c.fcltNm|e }}" data-sido="{{ c.sido }}"
+        onclick="event.stopPropagation(); toggleFav(this)"
+        style="background:none;border:none;font-size:1.2rem;cursor:pointer;padding:0;margin-left:4px;flex-shrink:0"
+        title="즐겨찾기">☆</button>
+      {% if is_knps %}
+      <a href="{{ c.url if c.url else 'https://res.knps.or.kr/reservation/searchSimpleCampReservation.do' }}"
+         target="_blank"
+         style="font-size:.75rem;color:#3182ce;text-decoration:none;border:1px solid #3182ce;padding:2px 7px;border-radius:10px;white-space:nowrap;margin-left:4px"
+         onclick="event.stopPropagation()">국립공원 →</a>
+      {% else %}
+      <a href="https://www.foresttrip.go.kr/resv/selectFrpCampList.do?searchWord={{ c.fcltNm|urlencode }}"
+         target="_blank"
+         style="font-size:.75rem;color:#2d6a4f;text-decoration:none;border:1px solid #2d6a4f;padding:2px 7px;border-radius:10px;white-space:nowrap;margin-left:4px"
+         onclick="event.stopPropagation()">숲나들e →</a>
+      {% endif %}
       <span style="font-size:.72rem;background:#e2e8f0;color:#4a5568;padding:2px 7px;border-radius:20px;white-space:nowrap;margin-left:6px">{{ c.sido }}</span>
+    </div>
+    <div style="margin-bottom:6px">
+      {% if is_knps %}
+      <span style="font-size:.72rem;background:#ebf8ff;color:#2b6cb0;padding:2px 7px;border-radius:10px;font-weight:600">⛺ 야영장</span>
+      {% else %}
+      <span style="font-size:.72rem;background:#f0fff4;color:#276749;padding:2px 7px;border-radius:10px;font-weight:600">🌲 휴양림</span>
+      {% endif %}
     </div>
     {% if c.addr %}
     <p style="font-size:.78rem;color:#a0aec0;margin:0 0 10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ c.addr }}</p>
     {% endif %}
+    {% if not is_knps %}
     <button class="btn btn-primary btn-sm" style="width:100%"
-            onclick="openModal('{{ c.fcltNm|e }}','{{ c.sido }}','{{ c.zoneId }}')">+ 알림 등록</button>
+            onclick="openModal('{{ c.fcltNm|e }}','{{ c.sido }}','{{ c.zoneId }}','foresttrip')">+ 알림 등록</button>
+    {% else %}
+    <div style="display:flex;gap:6px">
+      <button class="btn btn-primary btn-sm" style="flex:1"
+              onclick="openModal('{{ c.fcltNm|e }}','{{ c.sido }}','{{ c.zoneId }}','knps')">+ 알림 등록</button>
+      <a href="{{ c.url if c.url else 'https://res.knps.or.kr/reservation/searchSimpleCampReservation.do' }}"
+         target="_blank" class="btn btn-sm"
+         style="flex:1;display:block;text-align:center;background:#ebf8ff;color:#2b6cb0;border:1px solid #bee3f8;text-decoration:none"
+         onclick="event.stopPropagation()">예약 →</a>
+    </div>
+    {% endif %}
   </div>
   {% endfor %}
   {% if not campsites %}
@@ -47,24 +91,58 @@
 </div>
 
 <!-- 모달 -->
-<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:12px;padding:28px;width:92%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.25)">
+<div id="modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;overflow-y:auto">
+  <div style="background:#fff;border-radius:12px;padding:28px;width:92%;max-width:420px;box-shadow:0 8px 32px rgba(0,0,0,.25);margin:20px auto">
     <h2 style="margin:0 0 12px;font-size:1.05rem" id="m-title">알림 등록</h2>
+
+    <!-- zone_id 없을 때 경고 -->
+    <div id="modal-zoneid-warn" style="display:none;background:#fef3c7;border:1px solid #f59e0b;border-radius:6px;padding:8px 12px;margin-bottom:12px;font-size:.82rem;color:#92400e">
+      ⚠️ 이 캠핑장의 Zone ID가 없습니다.<br>
+      <a href="#" id="modal-forestlink" target="_blank" style="color:#2d6a4f;font-weight:600">숲나들e에서 이 캠핑장 열기 →</a>
+      (예약 페이지 URL의 <code>zoneId=</code> 뒤 숫자를 입력하세요)
+    </div>
+
     <a id="m-status-link" href="#" class="btn btn-secondary" style="width:100%;display:block;text-align:center;margin-bottom:12px">👀 예약 현황 보기</a>
     <form method="post" action="{{ url_for('quick_add') }}">
       <input type="hidden" name="camp_name" id="m-camp-name">
+      <input type="hidden" id="m-checkout" name="check_out">
+      <input type="hidden" id="m-source" name="source" value="foresttrip">
+
+      <!-- zone_id 입력란 (없을 때 표시) -->
+      <div id="modal-zoneid-wrap" style="margin-bottom:12px;display:none">
+        <label style="font-size:.82rem;font-weight:600;color:#2d6a4f;display:block;margin-bottom:4px">
+          Zone ID <span style="color:#e53e3e">*</span>
+          <span style="font-size:.72rem;color:#718096;font-weight:400"> — 숲나들e 예약 URL에서 zoneId= 뒤 숫자</span>
+        </label>
+        <input type="text" id="modal-zoneid-input" name="zone_id" placeholder="예: 12345"
+               style="width:100%;padding:8px 12px;border:1px solid #cbd5e0;border-radius:6px;font-size:.9rem;box-sizing:border-box">
+      </div>
+      <input type="hidden" id="modal-zoneid-hidden" name="zone_id" value="">
+
       <div class="form-group">
         <label>사이트명 <span style="font-weight:400;color:#a0aec0;font-size:.8rem">(선택 — 비우면 전체)</span></label>
         <input name="site_name" type="text" placeholder="예: A-1, 자동차야영장">
       </div>
+
       <div class="form-group">
-        <label>체크인 <span style="color:#e53e3e">*</span></label>
-        <input name="check_in" id="m-checkin" type="date" required>
+        <label>체크인 날짜 <span style="color:#e53e3e">*</span></label>
+        <input name="check_in" id="m-checkin" type="date" required oninput="updateStay()">
       </div>
+
       <div class="form-group">
-        <label>체크아웃 <span style="color:#e53e3e">*</span></label>
-        <input name="check_out" id="m-checkout" type="date" required>
+        <label>숙박 기간</label>
+        <select name="nights" id="m-nights" onchange="updateStay()" style="margin-top:.3rem">
+          <option value="1">1박 2일</option>
+          <option value="2">2박 3일</option>
+          <option value="3">3박 4일</option>
+          <option value="4">4박 5일</option>
+        </select>
       </div>
+
+      <div id="m-stay-info" style="background:#f0fff4;border-radius:7px;padding:10px;font-size:.85rem;color:#276749;margin-bottom:14px;display:none">
+        <strong id="m-stay-text"></strong>
+      </div>
+
       <div style="display:flex;gap:10px;margin-top:8px">
         <button type="button" class="btn btn-secondary" style="flex:1" onclick="closeModal()">취소</button>
         <button type="submit" class="btn btn-primary" style="flex:2">감시 시작</button>
@@ -74,7 +152,25 @@
 </div>
 
 <script>
+// 즐겨찾기 상태 초기 로드
+fetch('/api/favorites/list').then(r=>r.json()).then(function(list){
+  document.querySelectorAll('.fav-btn').forEach(function(btn){
+    if(list.includes(btn.dataset.zoneid)) btn.textContent='★';
+  });
+});
+
+function toggleFav(btn){
+  var fd=new FormData();
+  fd.append('campsite',btn.dataset.name);
+  fd.append('sido',btn.dataset.sido);
+  fetch('/api/favorite/'+btn.dataset.zoneid,{method:'POST',body:fd})
+    .then(r=>r.json()).then(function(d){
+      btn.textContent = d.result==='added'?'★':'☆';
+    });
+}
+
 var currentRegion='전체';
+var currentType='all';
 function setRegion(btn,r){
   currentRegion=r;
   document.querySelectorAll('#region-tabs button').forEach(function(b){
@@ -83,27 +179,117 @@ function setRegion(btn,r){
   });
   applyFilter();
 }
+function filterType(btn){
+  document.querySelectorAll('.type-btn').forEach(function(b){
+    b.classList.remove('btn-primary');
+    b.classList.add('btn-secondary');
+  });
+  btn.classList.remove('btn-secondary');
+  btn.classList.add('btn-primary');
+  currentType=btn.dataset.type;
+  applyFilter();
+}
 function applyFilter(){
   var q=document.getElementById('search-input').value.trim();
   var count=0;
-  document.querySelectorAll('.campsite-card').forEach(function(card){
+  document.querySelectorAll('.camp-card').forEach(function(card){
     var ro=currentRegion==='전체'||card.dataset.region.indexOf(currentRegion)!==-1;
     var no=!q||card.dataset.name.indexOf(q)!==-1;
-    card.style.display=(ro&&no)?'':'none';
-    if(ro&&no)count++;
+    var to=currentType==='all'||card.dataset.type===currentType;
+    card.style.display=(ro&&no&&to)?'':'none';
+    if(ro&&no&&to)count++;
   });
   document.getElementById('result-count').textContent=count+'개 캠핑장';
 }
-function openModal(name,sido,zoneId){
+function updateStay(){
+  var d=document.getElementById('m-checkin').value;
+  var n=parseInt(document.getElementById('m-nights').value);
+  if(!d||!n)return;
+  var checkin=new Date(d);
+  var checkout=new Date(checkin);
+  checkout.setDate(checkout.getDate()+n);
+  var today=new Date(); today.setHours(0,0,0,0);
+  var diffDays=Math.ceil((checkin-today)/(1000*60*60*24));
+  var ciStr=(checkin.getMonth()+1)+'월 '+checkin.getDate()+'일';
+  var coStr=(checkout.getMonth()+1)+'월 '+checkout.getDate()+'일';
+  var daysMsg=diffDays>0?'(D-'+diffDays+')':diffDays===0?'(오늘!)':'(이미 지난 날짜)';
+  document.getElementById('m-stay-text').textContent=n+'박 '+(n+1)+'일 | 체크인 '+ciStr+' '+daysMsg+' → 체크아웃 '+coStr;
+  document.getElementById('m-stay-info').style.display='block';
+  document.getElementById('m-checkout').value=checkout.toISOString().slice(0,10);
+  var sl=document.getElementById('m-status-link');
+  if(sl.dataset.zoneId){
+    sl.href='/status?zone_id='+sl.dataset.zoneId+'&date='+d+'&campsite='+sl.dataset.campsite;
+  }
+}
+function openModal(name,sido,zoneId,source){
+  source = source || 'foresttrip';
   document.getElementById('m-title').textContent=name;
   document.getElementById('m-camp-name').value=name;
+  document.getElementById('m-source').value=source;
+
+  var wrap=document.getElementById('modal-zoneid-wrap');
+  var inp=document.getElementById('modal-zoneid-input');
+  var hidden=document.getElementById('modal-zoneid-hidden');
+  var warn=document.getElementById('modal-zoneid-warn');
+  var forestlink=document.getElementById('modal-forestlink');
+
+  if(source==='knps'){
+    // 국립공원: zone_id=dept_id, 항상 있음
+    wrap.style.display='none';
+    warn.style.display='none';
+    hidden.value=zoneId;
+    inp.value=zoneId;
+    inp.removeAttribute('name');
+    hidden.name='zone_id';
+  } else {
+    forestlink.href='https://www.foresttrip.go.kr/resv/selectFrpCampList.do?searchWord='+encodeURIComponent(name);
+    if(zoneId && zoneId.trim()!==''){
+      wrap.style.display='none';
+      warn.style.display='none';
+      hidden.value=zoneId;
+      inp.value=zoneId;
+      inp.removeAttribute('name');
+      hidden.name='zone_id';
+    } else {
+      wrap.style.display='block';
+      warn.style.display='block';
+      hidden.value='';
+      hidden.name='zone_id_unused';
+      inp.name='zone_id';
+      inp.value='';
+    }
+  }
+
   var d=new Date(); d.setDate(d.getDate()+7);
-  var d2=new Date(); d2.setDate(d2.getDate()+8);
   var dateStr=d.toISOString().slice(0,10);
   document.getElementById('m-checkin').value=dateStr;
-  document.getElementById('m-checkout').value=d2.toISOString().slice(0,10);
-  var statusHref='/status?zone_id='+(zoneId||'')+'&date='+dateStr+'&campsite='+encodeURIComponent(name);
-  document.getElementById('m-status-link').href=statusHref;
+  document.getElementById('m-nights').value='1';
+  updateStay();
+
+  var statusLink=document.getElementById('m-status-link');
+  statusLink.dataset.zoneId=zoneId||'';
+  statusLink.dataset.campsite=encodeURIComponent(name);
+  statusLink.dataset.source=source;
+
+  if(source==='knps' && zoneId){
+    statusLink.href='https://res.knps.or.kr/reservation/searchSimpleCampReservation.do';
+    statusLink.textContent='⛺ 국립공원 예약 현황 보기';
+    statusLink.style.background='#ebf8ff';statusLink.style.color='#2b6cb0';
+    statusLink.target='_blank';
+    statusLink.onclick=null;
+  } else if(!zoneId||zoneId.trim()===''){
+    statusLink.href='#';
+    statusLink.textContent='⚠ zone_id 없음 — 숲나들e에서 직접 확인';
+    statusLink.style.background='#fed7d7';statusLink.style.color='#c53030';
+    statusLink.target='';
+    statusLink.onclick=function(e){e.preventDefault();alert('이 캠핑장은 zone_id 정보가 없습니다.\nhttps://www.foresttrip.go.kr 에서 직접 검색해 주세요.');};
+  } else {
+    statusLink.href='/status?zone_id='+zoneId+'&date='+dateStr+'&campsite='+encodeURIComponent(name);
+    statusLink.textContent='👀 예약 현황 보기';
+    statusLink.style.background='';statusLink.style.color='';
+    statusLink.target='';
+    statusLink.onclick=null;
+  }
   document.getElementById('modal').style.display='flex';
 }
 function closeModal(){document.getElementById('modal').style.display='none';}

@@ -58,23 +58,39 @@
 </style>
 </head>
 <body>
-{% if session.username %}
 <nav>
   <span class="brand">🏕️ CampWatch</span>
+  <a href="{{ url_for('campsites_page') }}">캠핑장 찾기</a>
+  {% if session.username %}
   <a href="{{ url_for('dashboard') }}">대시보드</a>
   <a href="{{ url_for('add') }}">+ 조건 추가</a>
   <a href="{{ url_for('settings') }}">설정</a>
+  <a href="{{ url_for('telegram_settings') }}">📱 알림설정</a>
+  <a href="{{ url_for('favorites_page') }}">⭐ 즐겨찾기</a>
   {% if session.get('is_admin') %}<a href="{{ url_for('admin_page') }}">👤 관리자</a>{% endif %}
   <span class="spacer"></span>
   <span>{{ session.username }}</span>
   <a href="{{ url_for('logout') }}">로그아웃</a>
+  {% else %}
+  <span class="spacer"></span>
+  <a href="{{ url_for('login') }}">로그인</a>
+  {% endif %}
 </nav>
-{% endif %}
 <div class="container">
   {% with msgs = get_flashed_messages() %}
     {% if msgs %}{% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}{% endif %}
   {% endwith %}
   {% block content %}{% endblock %}
 </div>
+<footer style="text-align:center;padding:20px;font-size:.75rem;color:#a0aec0;margin-top:40px;border-top:1px solid #e2e8f0">
+  CampWatch v{{ app_version }} ({{ app_build }})
+  {% if session.get('is_admin') %}
+  &nbsp;·&nbsp; <a href="/admin" style="color:#a0aec0">관리자</a>
+  &nbsp;·&nbsp;
+  <form method="post" action="{{ url_for('restart_server') }}" style="display:inline" onsubmit="return confirm('GitHub에서 최신 코드를 받아 재시작할까요?')">
+    <button style="background:none;border:none;color:#a0aec0;font-size:.75rem;cursor:pointer;padding:0">🔄 업데이트</button>
+  </form>
+  {% endif %}
+</footer>
 </body>
 </html>

@@ -1,14 +1,7 @@
-"""
-CampWatch Crawler
-- 고캠핑 API를 이용해 캠핑장 예약 가능 여부를 주기적으로 확인
-- 가용 자리 발견 시 텔레그램으로 알림 발송
-- 실행: python crawler.py
-"""
 import time
 import random
 import logging
 import requests
-from datetime import datetime
 from models import get_db, init_db
 
 logging.basicConfig(
@@ -21,151 +14,254 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-TELEGRAM_BOT_TOKEN = 'YOUR_BOT_TOKEN_HERE'  # 텔레그램 봇 토큰
-GOCAMPING_API_KEY = 'YOUR_GOCAMPING_API_KEY'  # 고캠핑 API 키 (선택)
-GOCAMPING_BASE = 'https://apis.data.go.kr/B551011/GoCamping'
+GOCAMPING_API_KEY = 'YOUR_GOCAMPING_API_KEY'
+GOCAMPING_BASE    = 'https://apis.data.go.kr/B551011/GoCamping'
 
-def send_telegram(chat_id: str, text: str):
-    if not chat_id or TELEGRAM_BOT_TOKEN == 'YOUR_BOT_TOKEN_HERE':
-        log.warning('텔레그램 봇 토큰 또는 chat_id 미설정')
+KNPS_CAMPS = {
+    "B131002": ("백운동", "가야산"), "B131001": ("삼정", "가야산"), "B131003": ("치인", "가야산"),
+    "B161004": ("갑사", "계룡산"), "B161001": ("동학사", "계룡산"),
+    "B041001": ("가인", "내장산"), "B042001": ("내장", "내장산"), "B042004": ("내장호", "내장산"),
+    "B091004": ("구계등", "다도해해상"), "B092003": ("시목", "다도해해상"),
+    "B091003": ("염포", "다도해해상"), "B091001": ("팔영산", "다도해해상"),
+    "B051002": ("덕유대1", "덕유산"), "B051007": ("덕유대2", "덕유산"), "B051006": ("덕유대3", "덕유산"),
+    "B172002": ("도원", "무등산"),
+    "B181002": ("고사포1", "변산반도"), "B181004": ("고사포2", "변산반도"), "B181005": ("직소천", "변산반도"),
+    "B141003": ("사기막", "북한산"),
+    "B031005": ("설악동", "설악산"),
+    "B122001": ("남천", "소백산"), "B121001": ("삼가", "소백산"),
+    "B061001": ("소금강산", "오대산"),
+    "B111003": ("닷돈재1", "월악산"), "B111001": ("닷돈재2", "월악산"), "B111007": ("덕주", "월악산"),
+    "B111002": ("송계", "월악산"), "B111004": ("용하", "월악산"), "B111008": ("하선암", "월악산"),
+    "B201001": ("천황", "월출산"),
+    "B071001": ("상의", "주왕산"),
+    "B011005": ("내원", "지리산"), "B012005": ("달궁1", "지리산"), "B012002": ("달궁2", "지리산"),
+    "B012003": ("덕동", "지리산"), "B011007": ("백무동", "지리산"), "B011006": ("소막골", "지리산"),
+    "B012010": ("학천", "지리산"),
+    "B101001": ("구룡", "치악산"), "B101002": ("금대", "치악산"),
+    "B221004": ("소도", "태백산"),
+    "B081002": ("몽산포", "태안해안"), "B081001": ("학암포", "태안해안"),
+    "B252001": ("갓바위", "팔공산"), "B251001": ("도학", "팔공산"),
+    "B022003": ("덕신", "한려해상"), "B021001": ("학동", "한려해상"),
+}
+
+
+def send_telegram(msg, token='', chat_id=''):
+    if not token or not chat_id:
+        log.warning('telegram not configured')
         return
-    url = f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage'
     try:
-        resp = requests.post(url, json={'chat_id': chat_id, 'text': text}, timeout=10)
-        resp.raise_for_status()
-        log.info(f'텔레그램 전송 완료 → {chat_id}')
+        resp = requests.post(
+            f'https://api.telegram.org/bot{token}/sendMessage',
+            data={'chat_id': chat_id, 'text': msg},
+            timeout=10
+        )
+        if resp.json().get('ok'):
+            log.info(f'telegram sent -> {chat_id}')
+        else:
+            log.warning(f'telegram failed: {resp.json()}')
     except Exception as e:
-        log.error(f'텔레그램 전송 실패: {e}')
+        log.warning(f'telegram error: {e}')
 
-def check_availability(camp_name: str, site_name: str, check_in: str, check_out: str) -> list:
-    """
-    고캠핑 API로 예약 가능 사이트 확인.
-    API 키 없이는 직접 페이지를 파싱하는 fallback 사용.
-    가능한 사이트 목록(str list) 반환.
-    """
+
+def check_knps_availability(zone_id, date):
+    from bs4 import BeautifulSoup as BS
+    date_compact = date.replace("-", "")
+    camp_info = KNPS_CAMPS.get(zone_id, (zone_id, ""))
+    dept_name, parent_dept_name = camp_info if isinstance(camp_info, tuple) else (camp_info, "")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept-Language": "ko-KR,ko;q=0.9",
+        "Referer": "https://res.knps.or.kr/reservation/searchSimpleCampReservation.do",
+    }
+    try:
+        s = requests.Session()
+        s.get("https://res.knps.or.kr/reservation/searchSimpleCampReservation.do",
+              headers=headers, timeout=15)
+        resp = s.post(
+            "https://res.knps.or.kr/reservation/campsiteList.do",
+            headers={**headers, "AJAX": "true",
+                     "X-Requested-With": "XMLHttpRequest",
+                     "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8"},
+            data={"dept_id": zone_id, "dept_name": dept_name,
+                  "parent_dept_name": parent_dept_name,
+                  "prd_ctg_id": "", "isGreenpoint": "N"},
+            timeout=20,
+        )
+        soup = BS(resp.text, "lxml")
+        available = []
+        for el in soup.find_all(attrs={"data-use_df": date_compact}):
+            if el.get("data-reser_tp") in ("R", "W"):
+                title = el.get("data-title") or el.get("data-prod-id") or ""
+                if title and title not in available:
+                    available.append(title)
+        return available
+    except Exception as e:
+        log.warning(f"knps check error [{zone_id}]: {e}")
+        return []
+
+
+def check_foresttrip_availability(camp_name, site_name, zone_id, check_in, check_out, nights=1):
+    """숲나들e 빈자리 조회 (srchInsttId 방식). 가용 슬롯 목록 반환, 오류 시 []."""
+    from bs4 import BeautifulSoup as BS
+    from datetime import datetime as _dt, timedelta
+    if not zone_id:
+        return []
+    date_str = check_in.replace("-", "")
+    try:
+        end_str = (_dt.strptime(date_str, "%Y%m%d") + timedelta(days=nights)).strftime("%Y%m%d")
+    except Exception:
+        return []
+    s = requests.Session()
+    try:
+        s.get("https://www.foresttrip.go.kr/", timeout=8, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        })
+        url = "https://www.foresttrip.go.kr/rep/or/sssn/fcfsRsrvtPssblGoodsDetls.do"
+        params = {
+            "srchInsttId": zone_id,
+            "srchRsrvtBgDt": date_str,
+            "srchRsrvtEdDt": end_str,
+            "srchStngNofpr": "2",
+            "srchSthngCnt": "1",
+            "rsrvtPssblYn": "N",
+            "menuId": "001001",
+            "hmpgId": "FRIP",
+        }
+        r = s.get(url, params=params, timeout=10, headers={
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "Referer": "https://www.foresttrip.go.kr/",
+            "Accept": "text/html,application/xhtml+xml,*/*",
+        })
+        soup = BS(r.text, "lxml")
+        available_count = len(soup.find_all(string=lambda t: t and '예약하기' in t))
+        if available_count == 0:
+            available_count = len([tag for tag in soup.find_all(['a', 'button'])
+                                   if '예약하기' in tag.get_text()])
+        # crawler는 리스트 반환 유지 (run_crawler에서 if available: 로 판정)
+        return [f'예약가능-{i+1}' for i in range(available_count)]
+    except Exception as e:
+        log.warning(f"foresttrip check error [{camp_name}]: {e}")
+        return []
+
+
+def check_availability(camp_name, site_name, check_in, check_out):
     available = []
-
     if GOCAMPING_API_KEY and GOCAMPING_API_KEY != 'YOUR_GOCAMPING_API_KEY':
         try:
-            # 캠핑장 검색
-            search_url = f'{GOCAMPING_BASE}/basedList'
-            params = {
+            r = requests.get(f'{GOCAMPING_BASE}/basedList', params={
                 'serviceKey': GOCAMPING_API_KEY,
-                'numOfRows': 10,
-                'pageNo': 1,
-                'MobileOS': 'ETC',
-                'MobileApp': 'CampWatch',
-                '_type': 'json',
-                'keyword': camp_name
-            }
-            r = requests.get(search_url, params=params, timeout=15)
-            data = r.json()
-            items = data.get('response', {}).get('body', {}).get('items', {}).get('item', [])
+                'numOfRows': 10, 'pageNo': 1,
+                'MobileOS': 'ETC', 'MobileApp': 'CampWatch',
+                '_type': 'json', 'keyword': camp_name
+            }, timeout=15)
+            items = r.json().get('response', {}).get('body', {}).get('items', {}).get('item', [])
             if isinstance(items, dict):
                 items = [items]
-
             for item in items:
-                content_id = item.get('contentId')
-                name = item.get('facltNm', '')
-                if camp_name.lower() not in name.lower():
+                if camp_name.lower() not in item.get('facltNm', '').lower():
                     continue
-
-                # 예약 가능 여부 확인
-                avail_url = f'{GOCAMPING_BASE}/availableList'
-                avail_params = {
+                avail_r = requests.get(f'{GOCAMPING_BASE}/availableList', params={
                     'serviceKey': GOCAMPING_API_KEY,
-                    'numOfRows': 100,
-                    'pageNo': 1,
-                    'MobileOS': 'ETC',
-                    'MobileApp': 'CampWatch',
+                    'numOfRows': 100, 'pageNo': 1,
+                    'MobileOS': 'ETC', 'MobileApp': 'CampWatch',
                     '_type': 'json',
-                    'contentId': content_id,
+                    'contentId': item.get('contentId'),
                     'checkin': check_in.replace('-', ''),
                     'checkout': check_out.replace('-', '')
-                }
-                avail_r = requests.get(avail_url, params=avail_params, timeout=15)
-                avail_data = avail_r.json()
-                avail_items = avail_data.get('response', {}).get('body', {}).get('items', {}).get('item', [])
+                }, timeout=15)
+                avail_items = avail_r.json().get('response', {}).get('body', {}).get('items', {}).get('item', [])
                 if isinstance(avail_items, dict):
                     avail_items = [avail_items]
-
                 for a in avail_items:
                     site = a.get('siteName', a.get('siteNo', ''))
                     if not site_name or site_name in str(site):
-                        available.append(f"{name} - {site}")
-
+                        available.append(f"{item.get('facltNm')} - {site}")
         except Exception as e:
-            log.error(f'고캠핑 API 오류: {e}')
-
+            log.error(f'gocamping API error: {e}')
     else:
-        # API 키 없을 때: 고캠핑 웹 fallback (기본 가용성 시뮬레이션)
-        log.info(f'[{camp_name}] API 키 미설정 — 웹 크롤링 모드 (구현 필요)')
-        # 실제 운영 시 여기에 BeautifulSoup 파싱 로직 추가
-
+        log.info(f'[{camp_name}] API key not set - skip')
     return available
+
 
 def run_crawler():
     init_db()
-    log.info('=== CampWatch 크롤러 시작 ===')
+    log.info('=== CampWatch crawler start ===')
 
     while True:
         try:
             db = get_db()
             conditions = db.execute(
-                '''SELECT wc.*, u.telegram_chat_id
+                '''SELECT wc.*, u.telegram_token, u.telegram_chat_id, u.level
                    FROM watch_conditions wc
                    JOIN users u ON wc.user_id = u.id
                    WHERE wc.active = 1'''
             ).fetchall()
             db.close()
 
-            log.info(f'활성 감시 조건 {len(conditions)}개 확인 중')
+            max_level = max((c['level'] or 1 for c in conditions), default=1)
+            if max_level >= 3:
+                delay_min, delay_max = 30, 60
+            elif max_level == 2:
+                delay_min, delay_max = 60, 180
+            else:
+                delay_min, delay_max = 180, 300
+
+            log.info(f'active conditions: {len(conditions)}, max level: {max_level}, delay: {delay_min}~{delay_max}s')
 
             for cond in conditions:
-                cid = cond['id']
-                camp = cond['camp_name']
-                site = cond['site_name'] or ''
+                cid      = cond['id']
+                camp     = cond['camp_name']
+                site     = cond['site_name'] or ''
                 check_in = cond['check_in']
-                check_out = cond['check_out']
-                chat_id = cond['telegram_chat_id']
+                check_out= cond['check_out']
+                zone_id  = cond['zone_id'] or ''
+                nights   = cond['nights'] or 1
+                token    = cond['telegram_token'] or ''
+                chat_id  = cond['telegram_chat_id'] or ''
+                try:
+                    source = cond['source'] or 'foresttrip'
+                except Exception:
+                    source = 'foresttrip'
 
-                log.info(f'확인: [{camp}] {check_in}~{check_out}')
-                available = check_availability(camp, site, check_in, check_out)
+                log.info(f'check: [{camp}] {check_in}~{check_out} source={source}')
+
+                if source == 'knps' and zone_id:
+                    available = check_knps_availability(zone_id, check_in)
+                elif zone_id:
+                    available = check_foresttrip_availability(camp, site, zone_id, check_in, check_out, nights)
+                else:
+                    available = check_availability(camp, site, check_in, check_out)
 
                 if available:
+                    src_label = 'KNPS' if source == 'knps' else 'foresttrip'
+                    sites_str = ', '.join(str(s) for s in available[:5])
+                    if len(available) > 5:
+                        sites_str += f' +{len(available)-5}'
                     msg = (
-                        f'🏕️ [CampWatch 알림]\n'
-                        f'캠핑장: {camp}\n'
-                        f'날짜: {check_in} ~ {check_out}\n'
-                        f'가능 사이트: {", ".join(available)}\n'
-                        f'→ 빠르게 예약하세요!'
+                        f'[CampWatch {src_label}]\n'
+                        f'{camp}\n'
+                        f'{check_in} ~ {check_out}\n'
+                        f'available: {sites_str}'
                     )
-                    log.info(f'가용 발견! {available}')
-
-                    # 알림 로그 저장
+                    log.info(f'available! {available[:3]}')
                     db2 = get_db()
-                    db2.execute(
-                        'INSERT INTO notify_log (condition_id, message) VALUES (?, ?)',
-                        (cid, msg)
-                    )
+                    db2.execute('INSERT INTO notify_log (condition_id, message) VALUES (?, ?)', (cid, msg))
                     db2.commit()
                     db2.close()
-
-                    if chat_id:
-                        send_telegram(chat_id, msg)
+                    send_telegram(msg, token, chat_id)
                 else:
-                    log.info(f'가용 없음: [{camp}]')
+                    log.info(f'no availability: [{camp}]')
 
-                # 조건 간 짧은 딜레이
                 time.sleep(random.uniform(3, 8))
 
         except Exception as e:
-            log.error(f'크롤러 오류: {e}')
+            log.error(f'crawler error: {e}')
 
-        # 3~5분 랜덤 대기
-        wait = random.uniform(180, 300)
-        log.info(f'다음 확인까지 {wait:.0f}초 대기')
+        wait = random.uniform(delay_min, delay_max)
+        log.info(f'next check in {wait:.0f}s')
         time.sleep(wait)
+
 
 if __name__ == '__main__':
     run_crawler()

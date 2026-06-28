@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+  <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">← 대시보드</a>
+  <h1 style="margin:0">텔레그램 알림 설정</h1>
+</div>
+
+{% if msg %}
+<div class="flash" style="{% if '✅' in msg %}background:#f0fff4;border-color:#9ae6b4;color:#276749{% else %}background:#fff5f5;border-color:#fed7d7;color:#c53030{% endif %}">
+  {{ msg }}
+</div>
+{% endif %}
+
+<div class="card" style="margin-bottom:16px">
+  <h2>1단계: Chat ID 찾기</h2>
+  <p style="font-size:.85rem;color:#718096;margin-bottom:14px">
+    ① <a href="https://t.me/BotFather" target="_blank" style="color:#2d6a4f;font-weight:600">@BotFather</a>에서 봇 생성 → 토큰 받기<br>
+    ② 내 텔레그램에서 해당 봇에게 아무 메시지나 전송<br>
+    ③ 아래에 토큰 입력 후 "Chat ID 찾기" 클릭
+  </p>
+  <form method="post">
+    <input type="hidden" name="action" value="find_chatid">
+    <div class="form-group">
+      <label>봇 토큰</label>
+      <input name="bot_token" type="text" placeholder="123456789:ABCDEFGHIJKLMNxxx" value="{{ user.telegram_token or '' }}">
+    </div>
+    <button class="btn btn-primary" type="submit">🔍 Chat ID 찾기</button>
+  </form>
+  {% if chat_id_found %}
+  <div style="margin-top:14px;background:#f0fff4;border:1px solid #9ae6b4;border-radius:8px;padding:12px">
+    <p style="color:#276749;font-size:.9rem;margin:0">발견된 Chat ID: <strong style="font-family:monospace;font-size:1rem">{{ chat_id_found }}</strong></p>
+  </div>
+  {% endif %}
+</div>
+
+<div class="card" style="margin-bottom:16px">
+  <h2>2단계: 설정 저장</h2>
+  <form method="post">
+    <input type="hidden" name="action" value="save">
+    <div class="form-group">
+      <label>봇 토큰</label>
+      <input name="bot_token" type="text" value="{{ user.telegram_token or '' }}" placeholder="봇 토큰 입력">
+    </div>
+    <div class="form-group">
+      <label>Chat ID</label>
+      <input name="chat_id" type="text" value="{{ user.telegram_chat_id or '' }}" placeholder="숫자 Chat ID 입력">
+    </div>
+    <button class="btn btn-primary" type="submit">💾 저장</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>3단계: 테스트 전송</h2>
+  <p style="font-size:.85rem;color:#718096;margin-bottom:14px">저장 후 테스트 메시지를 보내서 확인하세요.</p>
+  <form method="post">
+    <input type="hidden" name="action" value="test">
+    <button class="btn btn-secondary" type="submit">📤 테스트 메시지 보내기</button>
+  </form>
+  <p style="margin-top:12px;font-size:.85rem;color:#718096">
+    현재 Chat ID: <code style="background:#f5f5f5;padding:2px 6px;border-radius:4px">{{ user.telegram_chat_id or '미설정' }}</code>
+  </p>
+</div>
+{% endblock %}

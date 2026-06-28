@@ -6,6 +6,32 @@
   <a href="{{ url_for('add') }}" class="btn btn-secondary" style="margin-left:8px">+ 직접 입력</a>
 </div>
 
+{% if favorites %}
+<div class="card" style="margin-bottom:16px;background:#fffbeb;border:1px solid #fcd34d">
+  <h2 style="margin:0 0 12px;font-size:.95rem;color:#92400e">📅 주말 빈자리 현황</h2>
+  <div style="font-size:.8rem;color:#92400e;margin-bottom:8px">
+    이번주 토요일 <strong>{{ this_sat }}</strong> / 다음주 토요일 <strong>{{ next_sat }}</strong>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">
+    {% for f in favorites %}
+    <div style="background:#fff;border:0.5px solid #e2e8f0;border-radius:8px;padding:10px">
+      <p style="font-size:.82rem;font-weight:600;margin:0 0 6px;color:#1a202c">{{ f.campsite }}</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <span class="weekend-badge" data-zoneid="{{ f.zone_id }}" data-date="{{ this_sat }}"
+              style="font-size:.72rem;padding:2px 7px;border-radius:10px;background:#e2e8f0;color:#718096">
+          이번주 확인중...
+        </span>
+        <span class="weekend-badge" data-zoneid="{{ f.zone_id }}" data-date="{{ next_sat }}"
+              style="font-size:.72rem;padding:2px 7px;border-radius:10px;background:#e2e8f0;color:#718096">
+          다음주 확인중...
+        </span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div class="card">
 {% if conditions %}
 <table>
@@ -19,7 +45,17 @@
   <tr>
     <td>{{ c.camp_name }}</td>
     <td>{{ c.site_name or '전체' }}</td>
-    <td>{{ c.check_in }}</td>
+    <td>
+      {{ c.check_in }}
+      {% if c.zone_id %}
+      <span class="avail-badge" data-cid="{{ c.id }}"
+            style="display:inline-block;margin-left:4px;padding:1px 7px;border-radius:10px;font-size:.72rem;background:#e2e8f0;color:#718096">
+        확인중...
+      </span>
+      {% else %}
+      <span style="display:inline-block;margin-left:4px;padding:1px 7px;border-radius:10px;font-size:.72rem;background:#e2e8f0;color:#a0aec0">-</span>
+      {% endif %}
+    </td>
     <td>{{ c.check_out }}</td>
     <td>
       <form method="post" action="{{ url_for('toggle', cid=c.id) }}" style="display:inline">
@@ -59,4 +95,53 @@
 </table>
 </div>
 {% endif %}
+<script>
+document.querySelectorAll('.avail-badge').forEach(function(badge) {
+  var cid = badge.dataset.cid;
+  fetch('/api/check/' + cid)
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (data.error) {
+        badge.textContent = '확인불가';
+        badge.style.background = '#e2e8f0';
+        badge.style.color = '#718096';
+      } else if (data.count === 0) {
+        badge.textContent = '자리없음';
+        badge.style.background = '#fed7d7';
+        badge.style.color = '#c53030';
+      } else {
+        badge.textContent = '빈자리 ' + data.count + '개';
+        badge.style.background = '#c6f6d5';
+        badge.style.color = '#276749';
+        badge.style.fontWeight = '600';
+      }
+    })
+    .catch(function() {
+      badge.textContent = '-';
+    });
+});
+document.querySelectorAll('.weekend-badge').forEach(function(badge){
+  var zoneId = badge.dataset.zoneid;
+  var date   = badge.dataset.date;
+  var label  = badge.textContent.trim().includes('이번주') ? '이번주 ' : '다음주 ';
+  fetch('/api/check-date?zone_id='+zoneId+'&date='+date)
+    .then(function(r){return r.json();})
+    .then(function(d){
+      if(d.count > 0){
+        badge.textContent = label+'빈자리 '+d.count+'개';
+        badge.style.background='#c6f6d5';
+        badge.style.color='#276749';
+        badge.style.fontWeight='600';
+      } else if(d.count === 0){
+        badge.textContent = label+'마감';
+        badge.style.background='#fed7d7';
+        badge.style.color='#c53030';
+      } else {
+        badge.textContent = label+'-';
+      }
+    }).catch(function(){
+      badge.textContent = label+'-';
+    });
+});
+</script>
 {% endblock %}
