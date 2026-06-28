@@ -283,6 +283,21 @@ def telegram_settings():
     db.close()
     return render_template('telegram.html', user=user, msg=msg, chat_id_found=chat_id_found)
 
+@app.route('/settings/foresttrip', methods=['GET', 'POST'])
+@login_required
+def settings_foresttrip():
+    db = get_db()
+    if request.method == 'POST':
+        fid = request.form.get('foresttrip_id', '').strip()
+        fpw = request.form.get('foresttrip_pw', '').strip()
+        db.execute('UPDATE users SET foresttrip_id=?, foresttrip_pw=? WHERE id=?',
+                   (fid or None, fpw or None, session['user_id']))
+        db.commit()
+        flash('저장됐습니다.', 'success')
+    user = db.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone()
+    db.close()
+    return render_template('settings_foresttrip.html', user=user)
+
 @app.route('/restart', methods=['POST'])
 @login_required
 @admin_required
@@ -504,7 +519,46 @@ def fetch_campsites_from_knps():
     return list(FALLBACK_KNPS_CAMPSITES)
 
 
-def check_foresttrip_availability(zone_id: str, date: str, nights: int = 1) -> int:
+def get_foresttrip_session(user_id):
+    """foresttrip.go.kr에 로그인한 requests.Session 반환. 실패 시 None."""
+    import requests as _req
+    db = get_db()
+    user = db.execute("SELECT foresttrip_id, foresttrip_pw FROM users WHERE id=?", (user_id,)).fetchone()
+    db.close()
+
+    if not user or not user["foresttrip_id"] or not user["foresttrip_pw"]:
+        return None
+
+    s = _req.Session()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://www.foresttrip.go.kr/"
+    }
+    try:
+        r = s.get("https://www.foresttrip.go.kr/", headers=headers, timeout=10)
+        from bs4 import BeautifulSoup as BS
+        soup = BS(r.text, "lxml")
+        csrf = ""
+        csrf_tag = soup.find("meta", {"name": "_csrf"}) or soup.find("input", {"name": "_csrf"})
+        if csrf_tag:
+            csrf = csrf_tag.get("content") or csrf_tag.get("value", "")
+
+        login_data = {
+            "userId": user["foresttrip_id"],
+            "userPwd": user["foresttrip_pw"],
+            "_csrf": csrf,
+        }
+        r2 = s.post("https://www.foresttrip.go.kr/member/login/memberLoginProc.do",
+                    data=login_data, headers=headers, timeout=10, allow_redirects=True)
+
+        if "logout" in r2.text.lower() or "로그아웃" in r2.text:
+            return s
+        return None
+    except Exception:
+        return None
+
+
+def check_foresttrip_availability(zone_id: str, date: str, nights: int = 1, user_id=None) -> int:
     """숲나들e 빈자리 수 반환 (srchInsttId 방식). 오류 시 -1."""
     if not zone_id:
         return -1
@@ -517,11 +571,17 @@ def check_foresttrip_availability(zone_id: str, date: str, nights: int = 1) -> i
         end_str = (dt + timedelta(days=nights)).strftime("%Y%m%d")
     except Exception:
         return -1
-    s = _req.Session()
-    try:
+
+    s = None
+    if user_id:
+        s = get_foresttrip_session(user_id)
+    if s is None:
+        s = _req.Session()
         s.get("https://www.foresttrip.go.kr/", timeout=8, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         })
+
+    try:
         url = "https://www.foresttrip.go.kr/rep/or/sssn/fcfsRsrvtPssblGoodsDetls.do"
         params = {
             "srchInsttId": zone_id,
@@ -610,7 +670,7 @@ def show_status():
     available, full, error = [], [], None
     if zone_id and date:
         try:
-            count = check_foresttrip_availability(zone_id, date)
+            count = check_foresttrip_availability(zone_id, date, user_id=session.get('user_id'))
             if count > 0:
                 available = [f'예약 가능 {count}건']
             elif count == 0:
@@ -651,7 +711,7 @@ def api_check(cond_id):
         count = check_knps_availability(cond['zone_id'], cond['check_in'])
         return jsonify({'count': count, 'source': 'knps'})
     try:
-        count = check_foresttrip_availability(cond['zone_id'], cond['check_in'], nights)
+        count = check_foresttrip_availability(cond['zone_id'], cond['check_in'], nights, user_id=session.get('user_id'))
         return jsonify({'count': count, 'source': 'foresttrip'})
     except Exception as e:
         return jsonify({'error': str(e), 'count': -1})
@@ -704,7 +764,7 @@ def api_check_date():
     if source == "knps":
         count = check_knps_availability(zone_id, date)
     else:
-        count = check_foresttrip_availability(zone_id, date)
+        count = check_foresttrip_availability(zone_id, date, user_id=session.get('user_id'))
     return {"count": count}
 
 if __name__ == '__main__':

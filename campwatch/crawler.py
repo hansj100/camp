@@ -4,6 +4,9 @@ import logging
 import requests
 from models import get_db, init_db
 
+# foresttrip 로그인 세션 캐시: {user_id: (session, fetched_at)}
+_FT_SESSION_CACHE = {}
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s',
@@ -43,6 +46,49 @@ KNPS_CAMPS = {
     "B252001": ("갓바위", "팔공산"), "B251001": ("도학", "팔공산"),
     "B022003": ("덕신", "한려해상"), "B021001": ("학동", "한려해상"),
 }
+
+
+def get_foresttrip_session_for_user(user_id):
+    """foresttrip.go.kr에 로그인한 세션 반환. 1시간마다 갱신, 실패 시 None."""
+    from bs4 import BeautifulSoup as BS
+    now = time.time()
+    cached = _FT_SESSION_CACHE.get(user_id)
+    if cached and now - cached[1] < 3600:
+        return cached[0]
+
+    db = get_db()
+    user = db.execute("SELECT foresttrip_id, foresttrip_pw FROM users WHERE id=?", (user_id,)).fetchone()
+    db.close()
+
+    if not user or not user["foresttrip_id"] or not user["foresttrip_pw"]:
+        return None
+
+    s = requests.Session()
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://www.foresttrip.go.kr/"
+    }
+    try:
+        r = s.get("https://www.foresttrip.go.kr/", headers=headers, timeout=10)
+        soup = BS(r.text, "lxml")
+        csrf = ""
+        csrf_tag = soup.find("meta", {"name": "_csrf"}) or soup.find("input", {"name": "_csrf"})
+        if csrf_tag:
+            csrf = csrf_tag.get("content") or csrf_tag.get("value", "")
+
+        r2 = s.post("https://www.foresttrip.go.kr/member/login/memberLoginProc.do",
+                    data={"userId": user["foresttrip_id"], "userPwd": user["foresttrip_pw"], "_csrf": csrf},
+                    headers=headers, timeout=10, allow_redirects=True)
+
+        if "logout" in r2.text.lower() or "로그아웃" in r2.text:
+            log.info(f"foresttrip login ok (user_id={user_id})")
+            _FT_SESSION_CACHE[user_id] = (s, now)
+            return s
+        log.warning(f"foresttrip login failed (user_id={user_id})")
+        return None
+    except Exception as e:
+        log.warning(f"foresttrip login error (user_id={user_id}): {e}")
+        return None
 
 
 def send_telegram(msg, token='', chat_id=''):
@@ -101,7 +147,7 @@ def check_knps_availability(zone_id, date):
         return []
 
 
-def check_foresttrip_availability(camp_name, site_name, zone_id, check_in, check_out, nights=1):
+def check_foresttrip_availability(camp_name, site_name, zone_id, check_in, check_out, nights=1, user_id=None):
     """숲나들e 빈자리 조회 (srchInsttId 방식). 가용 슬롯 목록 반환, 오류 시 []."""
     from bs4 import BeautifulSoup as BS
     from datetime import datetime as _dt, timedelta
@@ -112,11 +158,17 @@ def check_foresttrip_availability(camp_name, site_name, zone_id, check_in, check
         end_str = (_dt.strptime(date_str, "%Y%m%d") + timedelta(days=nights)).strftime("%Y%m%d")
     except Exception:
         return []
-    s = requests.Session()
-    try:
+
+    s = None
+    if user_id:
+        s = get_foresttrip_session_for_user(user_id)
+    if s is None:
+        s = requests.Session()
         s.get("https://www.foresttrip.go.kr/", timeout=8, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         })
+
+    try:
         url = "https://www.foresttrip.go.kr/rep/or/sssn/fcfsRsrvtPssblGoodsDetls.do"
         params = {
             "srchInsttId": zone_id,
@@ -138,7 +190,6 @@ def check_foresttrip_availability(camp_name, site_name, zone_id, check_in, check
         if available_count == 0:
             available_count = len([tag for tag in soup.find_all(['a', 'button'])
                                    if '예약하기' in tag.get_text()])
-        # crawler는 리스트 반환 유지 (run_crawler에서 if available: 로 판정)
         return [f'예약가능-{i+1}' for i in range(available_count)]
     except Exception as e:
         log.warning(f"foresttrip check error [{camp_name}]: {e}")
@@ -192,7 +243,8 @@ def run_crawler():
         try:
             db = get_db()
             conditions = db.execute(
-                '''SELECT wc.*, u.telegram_token, u.telegram_chat_id, u.level
+                '''SELECT wc.*, u.telegram_token, u.telegram_chat_id, u.level,
+                          u.foresttrip_id, u.foresttrip_pw
                    FROM watch_conditions wc
                    JOIN users u ON wc.user_id = u.id
                    WHERE wc.active = 1'''
@@ -226,10 +278,11 @@ def run_crawler():
 
                 log.info(f'check: [{camp}] {check_in}~{check_out} source={source}')
 
+                user_id = cond['user_id']
                 if source == 'knps' and zone_id:
                     available = check_knps_availability(zone_id, check_in)
                 elif zone_id:
-                    available = check_foresttrip_availability(camp, site, zone_id, check_in, check_out, nights)
+                    available = check_foresttrip_availability(camp, site, zone_id, check_in, check_out, nights, user_id=user_id)
                 else:
                     available = check_availability(camp, site, check_in, check_out)
 

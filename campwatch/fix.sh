@@ -22,7 +22,22 @@ except Exception as e:
 conn.close()
 \""
 
-echo "=== 2. 최신 코드 pull 및 재시작 ==="
+echo "=== 2. DB 마이그레이션: foresttrip 계정 컬럼 추가 ==="
+ssh -i "$KEY" "$SERVER" "python3 -c \"
+import sqlite3
+conn = sqlite3.connect('/home/ubuntu/campwatch/campwatch.db')
+for col in ['foresttrip_id','foresttrip_pw']:
+    try:
+        conn.execute(f'ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT NULL')
+        conn.commit()
+        print(f'{col} 컬럼 추가 완료')
+    except Exception as e:
+        print(f'{col}: 이미 존재 또는 오류:', e)
+conn.close()
+print('완료')
+\""
+
+echo "=== 3. 최신 코드 pull 및 재시작 ==="
 ssh -i "$KEY" "$SERVER" "cd /home/ubuntu/campwatch && git pull origin main && bash restart.sh"
 
 echo "=== 완료 ==="

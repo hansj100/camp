@@ -66,6 +66,7 @@
   <a href="{{ url_for('add') }}">+ 조건 추가</a>
   <a href="{{ url_for('settings') }}">설정</a>
   <a href="{{ url_for('telegram_settings') }}">📱 알림설정</a>
+  <a href="{{ url_for('settings_foresttrip') }}">🌲 숲나들e</a>
   <a href="{{ url_for('favorites_page') }}">⭐ 즐겨찾기</a>
   {% if session.get('is_admin') %}<a href="{{ url_for('admin_page') }}">👤 관리자</a>{% endif %}
   <span class="spacer"></span>

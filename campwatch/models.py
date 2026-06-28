@@ -21,6 +21,8 @@ def init_db():
             is_approved INTEGER DEFAULT 0,
             is_admin    INTEGER DEFAULT 0,
             level       INTEGER DEFAULT 1,
+            foresttrip_id TEXT DEFAULT NULL,
+            foresttrip_pw TEXT DEFAULT NULL,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
@@ -66,6 +68,14 @@ def init_db():
         conn.commit()
     except Exception:
         pass  # 이미 존재
+
+    # 마이그레이션: foresttrip 계정 컬럼 추가
+    for col in ('foresttrip_id', 'foresttrip_pw'):
+        try:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT NULL")
+            conn.commit()
+        except Exception:
+            pass  # 이미 존재
 
     # 관리자 계정 없으면 자동 생성
     import bcrypt
