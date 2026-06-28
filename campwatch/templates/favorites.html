@@ -1,22 +1,45 @@
 {% extends "base.html" %}
 {% block title %}즐겨찾기 — CampWatch{% endblock %}
 {% block content %}
+<style>
+.avail-badge    { display:inline-block;padding:4px 10px;border-radius:12px;font-size:.85rem;font-weight:600; }
+.avail-init     { background:#e2e8f0;color:#718096; }
+.avail-checking { background:#ebf8ff;color:#2b6cb0; }
+.avail-yes      { background:#c6f6d5;color:#276749; }
+.avail-no       { background:#fed7d7;color:#9b2c2c; }
+.avail-unknown  { background:#fefcbf;color:#744210; }
+.date-picker-bar { display:flex;gap:12px;align-items:center;margin-bottom:20px;padding:16px;background:white;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.1);flex-wrap:wrap; }
+.date-picker-bar label { font-weight:600;color:#4a5568; }
+</style>
+
 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
   <h1 style="margin:0">⭐ 즐겨찾기</h1>
   <a href="/campsites" class="btn btn-secondary btn-sm">← 캠핑장 찾기</a>
 </div>
+
 {% if favorites %}
+<div class="date-picker-bar">
+  <label>📅 날짜 선택</label>
+  <input type="date" id="check-date" style="padding:6px 10px;border:1px solid #cbd5e0;border-radius:6px;font-size:.9rem;">
+  <button class="btn btn-primary btn-sm" onclick="checkAll()">전체 빈자리 확인</button>
+</div>
+
 <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
   {% for f in favorites %}
-  <div class="card" style="padding:16px;border-left:3px solid #f6ad55">
+  <div class="card fav-card" style="padding:16px;border-left:3px solid #f6ad55"
+       data-zone-id="{{ f.zone_id }}"
+       data-source="{{ 'knps' if f.zone_id and f.zone_id.startswith('B') else 'foresttrip' }}">
     <div style="display:flex;justify-content:space-between;align-items:flex-start">
       <strong style="font-size:.9rem">{{ f.campsite }}</strong>
       <span style="font-size:.72rem;background:#e2e8f0;color:#4a5568;padding:2px 7px;border-radius:20px">{{ f.sido }}</span>
     </div>
     <div style="font-size:.75rem;color:#718096;margin-top:4px">zone_id: {{ f.zone_id }}</div>
+    <div style="margin-top:8px">
+      <span class="avail-badge avail-init">---</span>
+    </div>
     <div style="display:flex;gap:8px;margin-top:12px">
       <button class="btn btn-primary btn-sm" style="flex:1"
-              onclick="openModal('{{ f.campsite|e }}','{{ f.zone_id }}','{{ f.sido }}')">+ 알림 등록</button>
+              onclick="openModal('{{ f.campsite|e }}','{{ f.zone_id }}','{{ f.sido }}',document.getElementById('check-date').value)">🔔 알림 등록</button>
     </div>
   </div>
   {% endfor %}
@@ -71,6 +94,48 @@
 </div>
 
 <script>
+(function() {
+  var inp = document.getElementById('check-date');
+  if (inp) {
+    var d = new Date();
+    d.setDate(d.getDate() + 1);
+    inp.value = d.toISOString().slice(0, 10);
+    inp.min   = new Date().toISOString().slice(0, 10);
+  }
+})();
+
+async function checkAll() {
+  var date = document.getElementById('check-date').value;
+  if (!date) { alert('날짜를 먼저 선택해 주세요.'); return; }
+  var cards = document.querySelectorAll('.fav-card');
+  for (var i = 0; i < cards.length; i++) {
+    var card   = cards[i];
+    var zoneId = card.dataset.zoneId;
+    var source = card.dataset.source;
+    var badge  = card.querySelector('.avail-badge');
+    badge.textContent = '확인중...';
+    badge.className   = 'avail-badge avail-checking';
+    try {
+      var r    = await fetch('/api/check-date?zone_id=' + encodeURIComponent(zoneId) + '&date=' + date + '&source=' + source);
+      var data = await r.json();
+      var cnt  = data.count;
+      if (cnt > 0) {
+        badge.textContent = '✅ ' + cnt + '개 가능';
+        badge.className   = 'avail-badge avail-yes';
+      } else if (cnt === 0) {
+        badge.textContent = '❌ 마감';
+        badge.className   = 'avail-badge avail-no';
+      } else {
+        badge.textContent = '⚠️ 확인불가';
+        badge.className   = 'avail-badge avail-unknown';
+      }
+    } catch(e) {
+      badge.textContent = '⚠️ 오류';
+      badge.className   = 'avail-badge avail-unknown';
+    }
+  }
+}
+
 function updateStay(){
   var d=document.getElementById('m-checkin').value;
   var n=parseInt(document.getElementById('m-nights').value);
@@ -91,13 +156,19 @@ function updateStay(){
     sl.href='/status?zone_id='+sl.dataset.zoneId+'&date='+d+'&campsite='+sl.dataset.campsite;
   }
 }
-function openModal(name,zoneId,sido){
+
+function openModal(name, zoneId, sido, prefillDate) {
   document.getElementById('m-title').textContent=name;
   document.getElementById('m-camp-name').value=name;
   document.getElementById('m-zone-id').value=zoneId||'';
 
-  var d=new Date(); d.setDate(d.getDate()+7);
-  var dateStr=d.toISOString().slice(0,10);
+  var dateStr;
+  if (prefillDate) {
+    dateStr = prefillDate;
+  } else {
+    var d=new Date(); d.setDate(d.getDate()+7);
+    dateStr=d.toISOString().slice(0,10);
+  }
   document.getElementById('m-checkin').value=dateStr;
   document.getElementById('m-nights').value='1';
   updateStay();
@@ -118,6 +189,7 @@ function openModal(name,zoneId,sido){
   }
   document.getElementById('modal').style.display='flex';
 }
+
 function closeModal(){document.getElementById('modal').style.display='none';}
 </script>
 {% endblock %}
