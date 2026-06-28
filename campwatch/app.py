@@ -311,6 +311,30 @@ def settings_foresttrip():
     return render_template('settings_foresttrip.html', user=user,
                            foresttrip_id_display=foresttrip_id_display)
 
+@app.route('/settings/knps', methods=['GET', 'POST'])
+@login_required
+def settings_knps():
+    db = get_db()
+    if request.method == 'POST':
+        kid = request.form.get('knps_id', '').strip()
+        kpw = request.form.get('knps_pw', '').strip()
+        if kid and kpw:
+            db.execute('UPDATE users SET knps_id=?, knps_pw=? WHERE id=?',
+                       (encrypt_text(kid), encrypt_text(kpw), session['user_id']))
+        elif kid:
+            db.execute('UPDATE users SET knps_id=? WHERE id=?',
+                       (encrypt_text(kid), session['user_id']))
+        elif not kid and not kpw:
+            db.execute('UPDATE users SET knps_id=NULL, knps_pw=NULL WHERE id=?',
+                       (session['user_id'],))
+        db.commit()
+        flash('저장됐습니다.', 'success')
+    user = db.execute('SELECT * FROM users WHERE id=?', (session['user_id'],)).fetchone()
+    db.close()
+    knps_id_display = decrypt_text(user['knps_id']) if user['knps_id'] else None
+    return render_template('settings_knps.html', user=user, knps_id_display=knps_id_display)
+
+
 @app.route('/restart', methods=['POST'])
 @login_required
 @admin_required
@@ -629,7 +653,46 @@ def check_foresttrip_availability(zone_id: str, date: str, nights: int = 1, user
 
 
 
-def check_knps_availability(zone_id, date):
+def get_knps_session(user_id):
+    """reservation.knps.or.kr에 로그인한 requests.Session 반환. 실패 시 None."""
+    import requests as _req
+    db = get_db()
+    user = db.execute("SELECT knps_id, knps_pw FROM users WHERE id=?", (user_id,)).fetchone()
+    db.close()
+
+    if not user or not user["knps_id"] or not user["knps_pw"]:
+        return None
+
+    kid = decrypt_text(user["knps_id"])
+    kpw = decrypt_text(user["knps_pw"])
+    if not kid or not kpw:
+        return None
+
+    s = _req.Session()
+    base = "https://reservation.knps.or.kr"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": f"{base}/login/login.do",
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "X-Requested-With": "XMLHttpRequest",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+    }
+    try:
+        s.get(f"{base}/login/login.do", timeout=10,
+              headers={"User-Agent": headers["User-Agent"]})
+        r = s.post(f"{base}/mmb/mmbLoginProc.do",
+                   data={"mmbId": kid, "passWd": kpw,
+                         "loginType": "Member", "popupYn": "Y"},
+                   headers=headers, timeout=10)
+        data = r.json()
+        if not data.get("message"):
+            return s
+        return None
+    except Exception:
+        return None
+
+
+def check_knps_availability(zone_id, date, user_id=None):
     """KNPS availability check. Returns count of available sites, -1 on error."""
     import requests as _req
     from bs4 import BeautifulSoup as BS
@@ -645,9 +708,13 @@ def check_knps_availability(zone_id, date):
         "Referer": "https://res.knps.or.kr/reservation/searchSimpleCampReservation.do",
     }
     try:
-        s = _req.Session()
-        s.get("https://res.knps.or.kr/reservation/searchSimpleCampReservation.do",
-              headers=headers, timeout=15)
+        s = None
+        if user_id:
+            s = get_knps_session(user_id)
+        if s is None:
+            s = _req.Session()
+            s.get("https://res.knps.or.kr/reservation/searchSimpleCampReservation.do",
+                  headers=headers, timeout=15)
         resp = s.post(
             "https://res.knps.or.kr/reservation/campsiteList.do",
             headers={**headers, "AJAX": "true",
@@ -725,7 +792,7 @@ def api_check(cond_id):
     nights = cond['nights'] or 1
     site_name = cond['site_name'] or ''
     if source == 'knps':
-        count = check_knps_availability(cond['zone_id'], cond['check_in'])
+        count = check_knps_availability(cond['zone_id'], cond['check_in'], user_id=session.get('user_id'))
         return jsonify({'count': count, 'source': 'knps'})
     try:
         count = check_foresttrip_availability(cond['zone_id'], cond['check_in'], nights, user_id=session.get('user_id'))
@@ -779,7 +846,7 @@ def api_check_date():
     if not zone_id or not date:
         return {"count": -1}
     if source == "knps":
-        count = check_knps_availability(zone_id, date)
+        count = check_knps_availability(zone_id, date, user_id=session.get('user_id'))
     else:
         count = check_foresttrip_availability(zone_id, date, user_id=session.get('user_id'))
     return {"count": count}

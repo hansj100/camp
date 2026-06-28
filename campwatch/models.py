@@ -77,6 +77,14 @@ def init_db():
         except Exception:
             pass  # 이미 존재
 
+    # 마이그레이션: KNPS 계정 컬럼 추가
+    for col in ('knps_id', 'knps_pw'):
+        try:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT DEFAULT NULL")
+            conn.commit()
+        except Exception:
+            pass  # 이미 존재
+
     # 관리자 계정 없으면 자동 생성
     import bcrypt
     existing = conn.execute("SELECT id FROM users WHERE is_admin=1").fetchone()
